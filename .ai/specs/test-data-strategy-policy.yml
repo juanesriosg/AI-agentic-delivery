@@ -1,0 +1,9 @@
+schema: agentic.test_data_strategy_policy.v1
+required:
+  - deterministic_fixtures
+  - isolated_test_data
+  - no_production_data_mutation
+  - seed_or_factory_definition
+  - cleanup_strategy
+  - pii_redaction_when_needed
+  - database_transaction_or_container_strategy

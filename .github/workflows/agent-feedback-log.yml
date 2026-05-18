@@ -1,0 +1,31 @@
+name: Agent Feedback and Log Quality
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  log-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate logging scripts
+        run: |
+          python -m py_compile .ai/scripts/agent_log.py
+          python -m py_compile .ai/scripts/agent_feedback.py
+          python -m py_compile .ai/scripts/story_state.py
+
+      - name: Summarize agent log availability
+        run: |
+          echo "## Agent log quality" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f .agent/agents.log.jsonl ]; then
+            echo "Found .agent/agents.log.jsonl" >> "$GITHUB_STEP_SUMMARY"
+            python -c "import json,pathlib; p=pathlib.Path('.agent/agents.log.jsonl'); lines=[l for l in p.read_text().splitlines() if l.strip()]; bad=0; [json.loads(l) for l in lines]; print('Entries:', len(lines))" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No committed .agent/agents.log.jsonl found. This is acceptable if the PR body includes agents.log summary or workflow artifacts contain logs." >> "$GITHUB_STEP_SUMMARY"
+          fi

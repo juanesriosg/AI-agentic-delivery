@@ -1,0 +1,46 @@
+version: 4
+name: Cloud Platform Quality Standard
+basis: AWS Well-Architected oriented review for cloud/infrastructure work.
+
+pillars:
+  operational_excellence:
+    checks:
+      - operations_as_code
+      - small_reversible_changes
+      - runbooks_or_playbooks_for_new_operations
+      - telemetry_for_health_and_operations
+      - clear_ownership
+  security:
+    checks:
+      - least_privilege
+      - no_long_lived_credentials
+      - secrets_not_committed
+      - encryption_review_when_data_touched
+      - traceability_and_auditability
+  reliability:
+    checks:
+      - health_checks
+      - rollback_plan
+      - failure_modes_considered
+      - retry_timeout_idempotency_review
+      - backup_or_recovery_implications
+  performance_efficiency:
+    checks:
+      - capacity_and_scaling_review
+      - latency_and_throughput_considered
+      - right_resource_for_workload
+      - monitoring_for_degradation
+  cost_optimization:
+    checks:
+      - non_production_resources_right_sized
+      - avoid_idle_resources
+      - cost_impact_documented_for_new_services
+  sustainability:
+    checks:
+      - unnecessary_resources_avoided
+      - efficient_managed_services_considered
+      - build_test_environments_ephemeral_when_possible
+
+production_policy:
+  agent_can_deploy_production: false
+  production_changes_require_human: true

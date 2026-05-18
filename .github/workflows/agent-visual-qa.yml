@@ -1,0 +1,57 @@
+name: Agent Visual QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_id:
+        description: Story ID
+        required: true
+      visual_url:
+        description: Optional URL/path for visual tests
+        required: false
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '**/*.css'
+      - '**/*.scss'
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.vue'
+      - '**/*.svelte'
+      - '**/*.html'
+      - '**/*.mdx'
+      - '.ai/**'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  visual-qa:
+    runs-on: ubuntu-latest
+    env:
+      AGENT_STORY_ID: ${{ github.event.inputs.story_id || github.event.pull_request.number || github.run_id }}
+      AGENT_VISUAL_URL: ${{ github.event.inputs.visual_url || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare visual evidence folders
+        run: |
+          mkdir -p ".agent/stories/${AGENT_STORY_ID}/screenshots" ".agent/stories/${AGENT_STORY_ID}/annotations"
+          python .ai/scripts/agent_log.py --agent visual-qa-engineer --story "$AGENT_STORY_ID" --stage visual_qa --action "Started visual QA workflow" --status started
+
+      - name: Run visual QA scaffold
+        run: |
+          .ai/scripts/run_visual_qa.sh "$AGENT_STORY_ID"
+          python .ai/scripts/visual_qa_report.py --story "$AGENT_STORY_ID"
+
+      - name: Upload visual QA artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-qa-${{ env.AGENT_STORY_ID }}-${{ github.run_id }}
+          path: |
+            .agent/stories/${{ env.AGENT_STORY_ID }}/screenshots/**
+            .agent/stories/${{ env.AGENT_STORY_ID }}/annotations/**
+            .agent/stories/${{ env.AGENT_STORY_ID }}/visual-evidence.md
+            .agent/stories/${{ env.AGENT_STORY_ID }}/agents.log.*

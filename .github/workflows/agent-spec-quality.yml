@@ -1,0 +1,20 @@
+name: Agent Spec and Evidence Quality
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+jobs:
+  spec-evidence-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate helper script syntax
+        run: |
+          python -m py_compile .ai/scripts/spec-quality-check.py
+          python -m py_compile .ai/scripts/generate-test-matrix.py
+          python -m py_compile .ai/scripts/agent-bug-scan.py
+          python -m py_compile .ai/scripts/validate-test-evidence.py
+      - name: Run heuristic bug-risk scan on changed files
+        run: |
+          python .ai/scripts/agent-bug-scan.py --format markdown

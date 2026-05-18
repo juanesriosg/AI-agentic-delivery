@@ -1,0 +1,137 @@
+name: Agent Task
+description: A task ready or nearly ready for an AI coding agent.
+title: "[Task]: "
+labels: ["ai:ready"]
+body:
+  - type: input
+    id: business_goal
+    attributes:
+      label: Business goal
+      description: Why this work matters.
+    validations:
+      required: true
+
+  - type: input
+    id: technical_goal
+    attributes:
+      label: Technical goal
+      description: What must change technically.
+    validations:
+      required: true
+
+  - type: input
+    id: repo
+    attributes:
+      label: Repository
+      description: Target repository.
+    validations:
+      required: true
+
+  - type: textarea
+    id: spec_sources
+    attributes:
+      label: Spec sources the agent must read
+      description: Links/files/issues/design docs/screenshots/logs. Put "none" if all context is in this issue.
+      value: |
+        - 
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Observable, testable outcomes. Prefer AC-001, AC-002, etc.
+      value: |
+        - AC-001: 
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What the agent may change.
+      value: |
+        - 
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What the agent must not change.
+      value: |
+        - 
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk level
+      options:
+        - low
+        - medium
+        - high
+    validations:
+      required: true
+
+  - type: dropdown
+    id: autonomy
+    attributes:
+      label: Autonomy level
+      options:
+        - L0
+        - L1
+        - L2
+        - L3
+        - L4
+        - L5
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation expected
+      description: Unit/component/integration/contract/E2E/dev/QA expectations and known commands.
+      value: |
+        - Spec validation: required
+        - Unit tests: 
+        - Component tests: 
+        - Integration tests: 
+        - Contract tests: 
+        - E2E tests: 
+        - Dev/manual tests: 
+        - QA tests: 
+    validations:
+      required: true
+
+  - type: textarea
+    id: clarification_policy
+    attributes:
+      label: Clarification and safe-progress policy
+      value: |
+        Agent may ask focused clarifications.
+        Agent should continue safe progress while waiting.
+        Agent must not implement risky guesses.
+    validations:
+      required: true
+
+  - type: textarea
+    id: qa_focus
+    attributes:
+      label: QA focus areas
+      value: |
+        - 
+    validations:
+      required: false
+
+  - type: input
+    id: owner
+    attributes:
+      label: Human owner/reviewer
+    validations:
+      required: true

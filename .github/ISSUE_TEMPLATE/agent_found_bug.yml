@@ -1,0 +1,63 @@
+name: Agent Found Bug
+description: Bug discovered by an autonomous agent during implementation, testing, or QA.
+title: "[Bug][Agent]: "
+labels: ["bug", "ai:found"]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: input
+    id: related
+    attributes:
+      label: Related task/PR/epic
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Logs, test output, screenshots, commands, environment.
+    validations:
+      required: true
+  - type: dropdown
+    id: blocks
+    attributes:
+      label: Blocks current task?
+      options:
+        - "yes"
+        - "no"
+    validations:
+      required: true
+  - type: textarea
+    id: regression
+    attributes:
+      label: Regression test status
+      description: Added, proposed, not practical, or not applicable.
+    validations:
+      required: true

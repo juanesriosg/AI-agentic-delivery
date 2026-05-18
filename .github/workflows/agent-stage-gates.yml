@@ -1,0 +1,82 @@
+name: Agent Stage Gates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      story_id:
+        description: Story ID to validate
+        required: true
+      gate:
+        description: Gate name
+        required: true
+        default: story_done
+        type: choice
+        options:
+          - task_done
+          - story_done
+          - release_readiness
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-stage-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 100
+
+      - name: Validate v4 helper scripts
+        run: |
+          python -m py_compile .ai/scripts/validate_stage_gate.py
+          python -m py_compile .ai/scripts/agent_log.py
+          python -m py_compile .ai/scripts/generate_pr_notification.py
+
+      - name: Check PR body has v4 evidence sections
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const required = [
+              "## Spec comprehension",
+              "## Test traceability",
+              "## QA checklist",
+              "## PM checklist",
+              "## Agent iterations / agents.log",
+              "## Agent-to-agent feedback",
+              "## Screenshots / visual evidence",
+              "## Validation",
+              "## Risk",
+              "## Rollback",
+              "## Human AI PM requested action"
+            ];
+            const missing = required.filter(section => !body.includes(section));
+            if (missing.length) {
+              core.setFailed(`PR body is missing v4 sections: ${missing.join(", ")}`);
+            }
+
+      - name: Run existing guardrails
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -x .ai/scripts/check-agent-guardrails.sh ]; then
+            .ai/scripts/check-agent-guardrails.sh
+          fi
+
+      - name: Validate requested story gate
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python .ai/scripts/validate_stage_gate.py --story "${{ github.event.inputs.story_id }}" --gate "${{ github.event.inputs.gate }}"
+
+      - name: Upload agent artifacts when present
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-stage-gates-${{ github.run_id }}
+          path: |
+            .agent/**
+          if-no-files-found: ignore

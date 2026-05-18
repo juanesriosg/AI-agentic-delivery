@@ -1,0 +1,51 @@
+version: 3
+name: Continuous Progress Policy
+purpose: Keep agents productive like real developers without hiding blockers.
+
+core_rule: A blocked decision does not mean all engineering work is blocked.
+
+default_safe_progress_actions:
+  - repo_discovery
+  - command_discovery
+  - dependency_installation_in_task_environment
+  - test_harness_setup
+  - existing_behavior_characterization
+  - bug_reproduction
+  - fixture_creation
+  - component_mapping
+  - contract_schema_inspection
+  - documentation_of_assumptions
+  - low_risk_unit_tests_for_unambiguous_logic
+  - creating_a_draft_pr_with_analysis_only
+  - selecting_next_ai_ready_task_if_wip_allows
+
+unsafe_progress_without_approval:
+  - public_api_behavior_change_based_on_guess
+  - auth_or_permission_change_based_on_guess
+  - billing_or_payment_change_based_on_guess
+  - database_migration_or_data_deletion
+  - infrastructure_or_production_config_change
+  - broad_refactor
+  - dependency_major_upgrade
+  - merging_or_deploying
+  - marking_qa_ready
+
+blocked_task_behavior:
+  required_actions:
+    - apply_ai_blocked_or_equivalent_status
+    - record_clarification_request
+    - record_work_completed_so_far
+    - identify_safe_progress_actions_taken
+    - identify_next_available_task_if_any
+
+wip_rules:
+  max_active_coding_tasks_per_agent: 1
+  max_waiting_for_manager_prs_per_agent: 2
+  may_switch_tasks_when:
+    - current_task_blocked_on_external_answer
+    - current_pr_ready_for_manager_review
+    - current_task_waiting_on_non_agent_ci_or_owner_review
+  must_not_switch_when:
+    - switch_would_create_uncommitted_risky_changes
+    - switch_would_create_unresolved_merge_conflicts
+    - switch_would_hide_a_blocker

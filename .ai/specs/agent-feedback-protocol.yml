@@ -1,0 +1,54 @@
+version: 4
+name: Agent Feedback Protocol
+
+feedback_required_fields:
+  - feedback_id
+  - story_id
+  - from_agent
+  - recommended_owner_agent
+  - severity
+  - stage
+  - blocking
+  - summary
+  - expected
+  - actual
+  - evidence
+  - verification_required
+
+severity:
+  critical:
+    meaning: Security, data loss, production outage, legal/compliance, or story cannot be safely reviewed.
+    blocks_story: true
+    human_escalation: true
+  high:
+    meaning: Major acceptance criteria failure, broken user journey, accessibility blocker, API mismatch, unsafe release risk.
+    blocks_story: true
+  medium:
+    meaning: Important quality issue that should be fixed before completion unless manager accepts deferral.
+    blocks_story: usually
+  low:
+    meaning: Minor polish or follow-up candidate.
+    blocks_story: false_by_default
+
+closure_required:
+  - owner_agent_acknowledged
+  - fix_or_decision_logged
+  - evidence_updated
+  - reviewing_agent_verified
+  - gate_recomputed
+
+self_closure_allowed:
+  low_risk_non_user_facing: true
+  medium_or_higher: false
+  qa_or_pm_feedback: false
+
+routing_examples:
+  visual_overlap: frontend-engineer
+  confusing_copy: product-manager-acceptance
+  inconsistent_design_pattern: design-system-agent
+  inaccessible_form: accessibility-qa-engineer
+  api_contract_mismatch: api-contract-engineer
+  slow_query: database-engineer
+  flaky_test: qa-regression-engineer
+  deploy_failure: devops-cicd-engineer
+  cloud_permission_risk: cloud-platform-engineer

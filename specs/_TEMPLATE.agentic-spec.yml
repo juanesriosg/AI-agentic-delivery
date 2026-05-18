@@ -1,0 +1,289 @@
+spec:
+  id: SPEC-YYYYMMDD-short-slug
+  story_id: STORY-short-slug
+  title: Short feature title
+  status: draft
+  priority: medium
+  risk_level: medium
+  author: ChatGPT / human
+  manager_github_user: "@juanesriosg"
+  repo: owner/repo
+  source_branch: dev/<feature>
+  target_branch: dev/<feature>
+  pr_strategy: one-responsibility-per-pr
+  autonomy_level: L3
+
+summary:
+  description: |
+    Describe what should be built or changed.
+  business_need: |
+    Explain why this matters and what outcome is expected.
+  user_need: |
+    As a <user>, I want <capability>, so that <benefit>.
+
+requirements:
+  functional:
+    - id: FR-001
+      requirement: The system must ...
+      priority: must
+      acceptance_signal: QA can verify by ...
+      owner_agent: frontend-engineer
+  non_functional:
+    - id: NFR-SEC-001
+      category: security
+      requirement: Protect data and permissions by ...
+      validation: security review / tests
+    - id: NFR-REL-001
+      category: reliability
+      requirement: Use timeouts/retries/idempotency where relevant.
+      validation: integration tests / failure tests
+    - id: NFR-PERF-001
+      category: performance
+      requirement: Avoid obvious scale blockers; use bounded queries/pagination when relevant.
+      validation: benchmark / code review
+  data:
+    - name: field_or_entity
+      source: user/api/db
+      validation: validation rules
+      sensitivity: public/internal/confidential/PII
+      retention: policy or not_applicable
+  api_contracts:
+    - name: endpoint_or_event
+      change_type: add/change/remove
+      request_shape: {}
+      response_shape: {}
+      compatibility: backward-compatible
+
+scope:
+  in_scope:
+    - specific item
+  out_of_scope:
+    - specific item
+  non_goals:
+    - explicit non-goal
+
+files:
+  expected_to_touch:
+    - path: src/path/or/pattern
+      expected_change: describe change
+      owner_agent: frontend-engineer
+      required: true
+    - path: tests/path/or/pattern
+      expected_change: add/update tests
+      owner_agent: qa-engineer
+      required: true
+  do_not_touch_without_approval:
+    - path: infra/**
+      reason: cloud/deployment risk
+      approval_required_from: manager/cloud-owner
+    - path: migrations/**
+      reason: data risk
+      approval_required_from: manager/db-owner
+    - path: auth/**
+      reason: security risk
+      approval_required_from: security-owner/manager
+  discover_first:
+    - module/component/test pattern to inspect before coding
+
+design_ux:
+  required: false
+  layout_expectations: desktop/mobile behavior
+  states_required: [empty, loading, valid, invalid, error, success, disabled]
+  accessibility_expectations: labels, keyboard navigation, focus, screen reader text
+  screenshots_required: false
+  screenshot_states: []
+  design_system_components: []
+
+architecture:
+  preferred_patterns: []
+  patterns_to_avoid: []
+  boundaries: []
+  dependencies_allowed: []
+  dependencies_disallowed: []
+  scale_considerations:
+    pagination: unknown
+    batching: unknown
+    caching: unknown
+    timeouts: required_when_network_or_io
+    retries: required_with_jitter_for_transient_failures
+    idempotency: required_for_mutating_operations
+    rate_limits: unknown
+  observability:
+    logs: required_for_important_events
+    metrics: required_if_operationally_relevant
+    traces: required_if_distributed_flow
+
+
+layer_order:
+  rule: database_api_frontend
+  database:
+    required: false
+    pass_file: docs/agentic-evidence/{spec_id}/layer-gates/database.passed.md
+    next_layer_unblocked_by: db integration and data model evidence
+  api:
+    required: false
+    depends_on: [database]
+    pass_file: docs/agentic-evidence/{spec_id}/layer-gates/api.passed.md
+    next_layer_unblocked_by: api contract and db-backed integration evidence
+  frontend:
+    required: false
+    depends_on: [api]
+    pass_file: docs/agentic-evidence/{spec_id}/layer-gates/frontend.passed.md
+    next_layer_unblocked_by: component, visual, accessibility, and real api/e2e evidence
+  mocks_are_final_integration: false
+  unit_tests_are_completion: false
+
+programming_paradigm:
+  selected: hybrid # data-driven | object-oriented | event-driven | functional-procedural | hybrid
+  data_driven:
+    use_here: false
+    reason: business rules / mappings / transformations / analytics
+  object_oriented:
+    use_here: false
+    reason: domain entities / invariants / strategies / repositories / adapters
+  event_driven:
+    use_here: false
+    reason: async workflows / events / queues / retries / idempotency
+  functional_or_procedural:
+    use_here: false
+    reason: simple isolated transformations or glue logic
+  design_patterns_to_use: []
+  patterns_to_avoid: [god-service, hidden-global-state, unnecessary-abstraction]
+
+cloud_aws:
+  touches_cloud_or_aws: false
+  new_aws_components: false
+  terraform_required: false # set true only when new/changed AWS components are required
+  environments: [local, dev]
+  secrets_needed: false
+  deployment_path: github-workflow-plus-terraform
+  rollback: describe rollback or revert plan
+
+acceptance_criteria:
+  - id: AC-001
+    criterion: Observable, testable result.
+    type: functional
+    validated_by: qa-agent
+    evidence: test output / screenshot / checklist
+  - id: AC-002
+    criterion: Product/usability acceptance result.
+    type: product
+    validated_by: pm-agent
+    evidence: pm checklist
+
+testing:
+  layer_strategy:
+    database_first: true
+    api_after_database: true
+    frontend_after_api: true
+    unit_tests_are_not_completion: true
+    evidence_matrix: docs/agentic-evidence/{spec_id}/{task_id}/layered-test-matrix.md
+  database:
+    required: false
+    focus: schema/model/repository/query/migration behavior
+    evidence: db integration test output
+  api:
+    required: false
+    focus: unit, contract, validation, auth, and db-backed integration
+    evidence: api contract + integration test output
+  frontend:
+    required: false
+    focus: component, visual, accessibility, and real api/e2e
+    evidence: screenshots + e2e output
+  unit:
+    required: true
+    focus: logic/components
+  component:
+    required: false
+    focus: component behavior
+  integration:
+    required: false
+    focus: api/db/external dependencies
+  contract:
+    required: false
+    focus: api/event contracts
+  e2e:
+    required: false
+    focus: user flow
+  visual_qa:
+    required: false
+    focus: states/viewports
+  accessibility_qa:
+    required: false
+    focus: keyboard/screen reader/labels
+  security:
+    required: false
+    focus: auth/input validation/secrets
+  performance:
+    required: false
+    focus: latency/load/query counts
+  local_dev_test:
+    required: true
+    focus: local app behavior when possible
+
+agent_routing:
+  required_agents:
+    - product-requirements-agent
+    - spec-task-splitter-agent
+    - qa-checklist-agent
+    - product-manager-acceptance-agent
+    - dev-manager-pr-governor-agent
+  conditional_agents:
+    frontend-engineer: when UI/client changes exist
+    backend-engineer: when API/server logic changes exist
+    database-engineer: when persistence/schema/query changes exist
+    terraform-platform-engineer: when AWS/cloud/infrastructure changes exist
+    security-engineer: when auth/data/security-sensitive changes exist
+    visual-qa-engineer: when UI changes exist
+    accessibility-qa-engineer: when user-facing UI changes exist
+
+pr_decomposition:
+  one_responsibility_per_pr: true
+  planned_prs:
+    - id: PR-1
+      responsibility: single responsibility
+      expected_files: []
+      depends_on: []
+      target_branch: dev/<feature>
+
+risks_assumptions_clarifications:
+  assumptions:
+    - id: A-001
+      assumption: assumption text
+      impact_if_wrong: impact
+      validation: how to validate
+  clarifications:
+    - id: Q-001
+      question: focused question
+      blocking: false
+      safe_progress_allowed: discovery/tests/planning
+  risks:
+    - id: R-001
+      risk: risk description
+      severity: medium
+      mitigation: mitigation
+      owner_agent: relevant-agent
+
+definition_of_done:
+  design_gate_passed: true
+  layer_gate_passed_for_pr_responsibility: true
+  database_gate_passed_before_api_when_data_involved: true
+  api_gate_passed_before_frontend_when_api_involved: true
+  qa_agent_approved: true
+  pm_agent_approved: true
+  dev_manager_pr_gate_passed: true
+  tests_added_or_updated: true
+  screenshots_for_ui_changes: true
+  accessibility_for_ui_changes: true
+  terraform_for_new_aws_components: true
+  agents_log_required: true
+  rollback_documented: true
+
+notification:
+  tag_manager: true
+  include_pr_link: true
+  include_summary: true
+  include_validation_status: true
+  include_evidence_links: true
+  include_risk_level: true
+  include_files_to_review: true

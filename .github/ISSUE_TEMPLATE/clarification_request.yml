@@ -1,0 +1,47 @@
+name: Agent Clarification Request
+description: Focused clarification needed by an AI agent while safe progress continues.
+title: "[Clarification]: "
+labels: ["ai:clarification", "manager:decision"]
+body:
+  - type: input
+    id: related_task
+    attributes:
+      label: Related task/PR/epic
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: Ask the smallest specific question possible.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this matters
+    validations:
+      required: true
+  - type: dropdown
+    id: blocking
+    attributes:
+      label: Blocking level
+      options:
+        - Blocks all implementation
+        - Blocks only one implementation path
+        - Non-blocking assumption
+        - Manager/owner decision
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options and agent recommendation
+    validations:
+      required: true
+  - type: textarea
+    id: safe_progress
+    attributes:
+      label: Safe progress while waiting
+    validations:
+      required: true

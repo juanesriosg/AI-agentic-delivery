@@ -1,0 +1,16 @@
+version: 3
+name: Assumption Register Schema
+required_fields:
+  task_id: string
+  assumptions:
+    type: list
+    item_required_fields:
+      - id
+      - statement
+      - source
+      - confidence
+      - risk_if_wrong
+      - validation_method
+      - needs_manager_confirmation
+confidence_values: [high, medium, low]
+source_values: [explicit_spec, inferred_from_repo, inferred_from_existing_tests, manager_message, stakeholder_message, agent_default]

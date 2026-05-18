@@ -1,0 +1,51 @@
+name: Agentic skill improvement gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.ai/agents/**'
+      - '.ai/skills/**'
+      - '.ai/specs/**'
+      - '.ai/evals/**'
+      - '.ai/scripts/**'
+      - '.github/codex/prompts/**'
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'START_HERE.md'
+      - 'docs/agentic-self-improvement/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  skill_improvement_gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run deterministic skill evals
+        run: |
+          python .ai/scripts/skill_eval_runner.py --all --base "${{ github.base_ref }}"
+
+      - name: Run skill improvement guardrails
+        run: |
+          python .ai/scripts/skill_guardrails.py --base "${{ github.base_ref }}"
+
+      - name: Upload skill gate reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-skill-improvement-gate-${{ github.run_id }}
+          path: |
+            skill-improvement-guardrails.*
+            docs/agentic-self-improvement/eval-report.md
+            .agent/self-improvement/eval-report.json
+          if-no-files-found: ignore

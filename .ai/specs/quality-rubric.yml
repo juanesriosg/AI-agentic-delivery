@@ -1,0 +1,120 @@
+version: 1
+
+score_scale:
+  1: "Poor: not reviewable or unsafe"
+  2: "Weak: significant issues remain"
+  3: "Acceptable: works but needs careful review"
+  4: "Good: ready for normal manager review"
+  5: "Excellent: small, tested, low-risk, clear"
+
+minimum_score_to_open_pr: 4
+minimum_score_with_justification: 3
+
+dimensions:
+  correctness:
+    weight: 3
+    questions:
+      - "Does it satisfy acceptance criteria?"
+      - "Are edge cases handled?"
+      - "Is behavior backward compatible where required?"
+
+  test_quality:
+    weight: 3
+    questions:
+      - "Are meaningful tests added or updated?"
+      - "Were relevant tests run?"
+      - "Are validation gaps documented?"
+
+  maintainability:
+    weight: 2
+    questions:
+      - "Is the solution simple?"
+      - "Does it match repo patterns?"
+      - "Is scope controlled?"
+
+  security:
+    weight: 3
+    questions:
+      - "Are secrets protected?"
+      - "Is least privilege preserved?"
+      - "Are user inputs handled safely?"
+
+  reliability:
+    weight: 2
+    questions:
+      - "Is rollback possible?"
+      - "Are failure cases considered?"
+      - "Are retries/idempotency considered if relevant?"
+
+  operability:
+    weight: 2
+    questions:
+      - "Are logs/metrics/traces affected?"
+      - "Can support/debugging understand the change?"
+      - "Are runbooks/docs updated if needed?"
+
+  performance_cost:
+    weight: 1
+    questions:
+      - "Could this create inefficient queries or resource use?"
+      - "Could this increase cloud or compute cost unexpectedly?"
+
+  pr_hygiene:
+    weight: 2
+    questions:
+      - "Is the PR small?"
+      - "Are unrelated changes absent?"
+      - "Is the PR summary clear?"
+
+automatic_fail_conditions:
+  - related_tests_failing
+  - protected_delete_without_approval
+  - secrets_committed
+  - production_deploy_attempted
+  - default_branch_direct_push
+  - public_api_changed_without_approval
+  - auth_or_billing_changed_without_approval
+  - migration_without_rollback_or_approval
+
+agent_action_when_score_below_threshold:
+  - fix_issues_once
+  - rerun_validation
+  - if_still_below_threshold_then_escalate
+
+
+v2_quality_additions:
+  mandatory_self_review: true
+  minimum_quality_scores:
+    low_risk: 75
+    medium_risk: 82
+    high_risk: 90
+  dimensions:
+    clean_code:
+      weight: 15
+      checks:
+        - clear_naming
+        - small_cohesive_units
+        - low_accidental_complexity
+        - no_unrelated_refactor
+    architecture:
+      weight: 15
+      checks:
+        - boundaries_respected
+        - dependency_direction_clear
+        - design_patterns_justified
+        - adr_when_required
+    reliability_scale:
+      weight: 15
+      checks:
+        - bounded_resources
+        - idempotency_when_needed
+        - timeouts_retries_when_needed
+        - concurrency_safe
+        - observability_sufficient
+    security:
+      weight: 10
+      checks:
+        - no_secrets
+        - input_validation
+        - authorization_preserved
+        - sensitive_data_not_logged

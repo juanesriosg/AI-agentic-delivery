@@ -1,0 +1,40 @@
+version: 10.0
+kind: database_access_config_schema
+
+fields:
+  connections:
+    type: list
+    required: true
+    item_fields:
+      name:
+        type: string
+        required: true
+      driver:
+        type: enum
+        values: [sqlite, postgres, mysql]
+        required: true
+      dsn_env_var:
+        type: string
+        required: true
+      environment:
+        type: enum
+        values: [local, dev, qa, staging, production, warehouse, read_replica]
+        required: true
+      readonly_required:
+        type: boolean
+        required: true
+      allowed_schemas:
+        type: list
+        required: false
+      blocked_tables:
+        type: list
+        required: false
+      max_rows:
+        type: integer
+        required: false
+      statement_timeout_seconds:
+        type: integer
+        required: false
+      pii_allowed:
+        type: boolean
+        required: false

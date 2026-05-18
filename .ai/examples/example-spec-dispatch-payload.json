@@ -1,0 +1,25 @@
+{
+  "event_type": "ai_spec_ready",
+  "repository": "owner/repo",
+  "source_spec_branch": "dev/export-orders-csv",
+  "source_commit_sha": "abc123",
+  "spec_path": "specs/export-orders-csv.spec.md",
+  "implementation_branch": "ai/SPEC-20260513-export-orders-csv-export-orders-csv",
+  "pr_target_branch": "dev/export-orders-csv",
+  "autonomy": "L3",
+  "required_agent": "mid-software-engineer",
+  "required_steps": [
+    "checkout source_spec_branch",
+    "read AGENTS.md and .ai/specs/*",
+    "run spec-quality-check",
+    "generate test matrix",
+    "ask focused clarifications if needed",
+    "continue safe progress",
+    "create implementation branch",
+    "implement",
+    "test",
+    "self-review",
+    "open PR to source_spec_branch",
+    "notify manager"
+  ]
+}

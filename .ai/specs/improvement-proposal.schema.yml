@@ -1,0 +1,34 @@
+schema: agentic.improvement_proposal.v1
+required_fields:
+  - proposal_id
+  - created_at
+  - author_agent
+  - objective
+  - evidence_summary
+  - feedback_event_ids
+  - target_files
+  - proposed_changes
+  - expected_improvement
+  - risk_assessment
+  - evals_added_or_updated
+  - rollback_plan
+  - human_review_required
+
+status_values:
+  - draft
+  - proposed
+  - eval_passed
+  - blocked
+  - approved
+  - rejected
+
+risk_levels:
+  - low
+  - medium
+  - high
+
+hard_rules:
+  - no_silent_policy_changes
+  - no_self_merge
+  - no_safety_weakening_without_manager_approval
+  - eval_report_required

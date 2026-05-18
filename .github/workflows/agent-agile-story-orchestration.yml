@@ -1,0 +1,92 @@
+name: Agent Agile Story Orchestration
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_id:
+        description: Optional story id to initialize
+        required: false
+      spec_path:
+        description: Optional spec path
+        required: false
+      dry_run:
+        description: Do not call external dispatch webhook
+        required: false
+        default: 'false'
+
+# v7 note: automatic spec-to-code execution is handled by agentic-spec-autostart.yml.
+# This legacy story initializer is manual to avoid duplicate orchestration.
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  initialize-story:
+    if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'ai:ready') || contains(github.event.issue.labels.*.name, 'ai:from-spec')
+    runs-on: ubuntu-latest
+    env:
+      AGENT_DISPATCH_WEBHOOK_URL: ${{ secrets.AGENT_DISPATCH_WEBHOOK_URL }}
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate v4 scripts
+        run: |
+          python -m py_compile .ai/scripts/agent_log.py
+          python -m py_compile .ai/scripts/agent_feedback.py
+          python -m py_compile .ai/scripts/story_state.py
+          python -m py_compile .ai/scripts/create_qa_checklist.py
+          python -m py_compile .ai/scripts/create_pm_checklist.py
+          python -m py_compile .ai/scripts/generate_pr_notification.py
+
+      - name: Detect spec path and initialize story artifacts
+        shell: bash
+        run: |
+          mkdir -p .agent/reports .agent/stories
+          SPEC_PATH="${{ github.event.inputs.spec_path }}"
+          STORY_ID="${{ github.event.inputs.story_id }}"
+
+          if [ -z "$SPEC_PATH" ]; then
+            SPEC_PATH="$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^(specs|docs/specs|requirements/specs|\.ai/inbox/specs|\.codex/specs)/' | head -1 || true)"
+          fi
+
+          if [ -z "$STORY_ID" ]; then
+            if [ -n "$SPEC_PATH" ]; then
+              BASENAME="$(basename "$SPEC_PATH")"
+              STORY_ID="${BASENAME%.*}"
+            else
+              STORY_ID="issue-${{ github.event.issue.number || github.run_id }}"
+            fi
+          fi
+
+          echo "Story: $STORY_ID" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Spec: ${SPEC_PATH:-none}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+          python .ai/scripts/story_state.py --story "$STORY_ID" --state spec_detected --agent agile-delivery-orchestrator --status started --note "Story initialized by workflow"
+          python .ai/scripts/agent_log.py --agent agile-delivery-orchestrator --story "$STORY_ID" --stage spec_detected --action "Initialized story orchestration" --status started --evidence "$SPEC_PATH"
+
+          if [ -n "$SPEC_PATH" ] && [ -f "$SPEC_PATH" ]; then
+            python .ai/scripts/create_qa_checklist.py --story "$STORY_ID" --spec "$SPEC_PATH"
+            python .ai/scripts/create_pm_checklist.py --story "$STORY_ID" --spec "$SPEC_PATH"
+            python .ai/scripts/story_state.py --story "$STORY_ID" --state specialist_routing --agent agile-delivery-orchestrator --status in_progress --artifact ".agent/stories/$STORY_ID/qa-checklist.md" --artifact ".agent/stories/$STORY_ID/pm-checklist.md"
+          fi
+
+          python .ai/scripts/generate_pr_notification.py --story "$STORY_ID" --source-spec "${SPEC_PATH:-none}" --summary "Story initialized; specialist agents should continue implementation, QA, PM review, and release readiness."
+
+      - name: Optional dispatch webhook for Codex Cloud / external agent runner
+        if: env.AGENT_DISPATCH_WEBHOOK_URL != '' && env.DRY_RUN != 'true'
+        shell: bash
+        run: |
+          payload="{\"repository\":\"${GITHUB_REPOSITORY}\",\"ref\":\"${GITHUB_REF_NAME}\",\"run_id\":\"${GITHUB_RUN_ID}\",\"event\":\"agentic_sdlc_v4_story_ready\"}"
+          curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$AGENT_DISPATCH_WEBHOOK_URL"
+
+      - name: Upload story initialization artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-agile-story-${{ github.run_id }}
+          path: |
+            .agent/**

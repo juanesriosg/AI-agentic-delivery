@@ -1,0 +1,20 @@
+bug_id: BUG-001
+title: Non-admin user can access CSV export endpoint
+severity: high
+confidence: confirmed
+related_task: TASK-123
+related_pr: PR-456
+expected_behavior: Non-admin users receive 403 Forbidden.
+actual_behavior: Non-admin users receive 200 OK and CSV content.
+reproduction_steps:
+  - Start local API with test database.
+  - Log in as user role viewer.
+  - GET /admin/users/export.csv.
+  - Observe 200 response.
+environment: local task environment, pytest integration suite
+evidence:
+  - tests/integration/test_user_export.py::test_non_admin_denied failed before fix
+suspected_area: export endpoint authorization guard
+blocks_current_task: true
+regression_test_status: added
+recommended_next_action: Fix auth guard before marking PR ready.

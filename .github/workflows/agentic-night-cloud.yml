@@ -1,0 +1,91 @@
+name: Agentic SDLC - Explicit cloud continuation
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_specs:
+        description: Maximum ready specs to process in explicit cloud mode
+        default: '2'
+        required: false
+      dry_run:
+        description: Generate prompts only
+        default: 'false'
+        required: false
+      confirm_cloud_run:
+        description: Type I_APPROVE_CLOUD_RUN to permit cloud execution
+        default: ''
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: agentic-explicit-cloud-continuation
+  cancel-in-progress: false
+
+jobs:
+  continue-cloud-work:
+    runs-on: ubuntu-latest
+    env:
+      CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      AGENT_MAX_FILES_CHANGED: '35'
+      AGENT_MAX_LINES_CHANGED: '1200'
+      AGENTIC_CODEX_MODEL: 'gpt-5.5'
+      AGENTIC_CODEX_REASONING_EFFORT: 'xhigh'
+    steps:
+      - name: Confirm explicit cloud opt-in
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.confirm_cloud_run }}" != "I_APPROVE_CLOUD_RUN" ]; then
+            echo "Cloud mode is blocked by local-first policy. Re-run manually and type I_APPROVE_CLOUD_RUN." >&2
+            exit 2
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Configure Git author
+        run: |
+          git config --global user.name "ai-agentic-sdlc"
+          git config --global user.email "ai-agentic-sdlc@users.noreply.github.com"
+
+      - name: Build cloud continuation plan
+        run: python .ai/scripts/agentic_sdlc.py cloud-plan
+
+      - name: Continue cloud-safe agentic work
+        run: |
+          MAX_SPECS="${{ github.event.inputs.max_specs || '2' }}"
+          DRY="${{ github.event.inputs.dry_run || 'false' }}"
+          EXTRA=()
+          if [ "$DRY" = "true" ]; then EXTRA+=(--dry-run); fi
+          export AGENTIC_EXPLICIT_CLOUD=true
+          python .ai/scripts/agentic_sdlc.py "${EXTRA[@]}" --allow-cloud run-once --mode cloud --max-specs "$MAX_SPECS"
+
+      - name: Upload explicit cloud reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-explicit-cloud-reports-${{ github.run_id }}
+          path: |
+            .agent/runs/**
+            .agent/state/**
+            docs/agentic-evidence/**
+          if-no-files-found: ignore

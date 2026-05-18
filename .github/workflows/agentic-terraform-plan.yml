@@ -1,0 +1,65 @@
+name: Agentic Terraform plan
+
+on:
+  pull_request:
+    paths:
+      - 'infra/terraform/**'
+      - 'terraform/**'
+      - '.github/workflows/*terraform*.yml'
+      - '.github/workflows/*terraform*.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+      AWS_TERRAFORM_PLAN_ROLE_ARN: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS credentials with OIDC if role is configured
+        if: env.AWS_TERRAFORM_PLAN_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init/validate/plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIR="infra/terraform"
+          if [ ! -d "$DIR" ] && [ -d "terraform" ]; then DIR="terraform"; fi
+          if [ ! -d "$DIR" ]; then
+            echo "No Terraform directory found."
+            exit 0
+          fi
+          cd "$DIR"
+          terraform init
+          terraform validate
+          terraform plan -out=tfplan
+          terraform show -no-color tfplan > terraform-plan.txt
+
+      - name: Upload Terraform plan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: |
+            infra/terraform/terraform-plan.txt
+            terraform/terraform-plan.txt
+          if-no-files-found: ignore

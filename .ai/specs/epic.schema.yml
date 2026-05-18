@@ -1,0 +1,54 @@
+version: 3
+name: Agent Epic Schema
+
+required_fields:
+  id: "Unique epic identifier"
+  title: "Epic title"
+  business_outcome: "Business/customer outcome"
+  stakeholder: "Primary stakeholder"
+  owner: "Human owner"
+  repos: "Repositories involved"
+  success_metrics: "How success is measured"
+  features: "Feature breakdown"
+  acceptance_criteria: "Epic-level acceptance criteria"
+  risks: "Known risks"
+  rollout_plan: "How work reaches users"
+  rollback_plan: "How epic can be reversed or disabled"
+
+v3_required_fields:
+  spec_sources: "Product, design, technical, QA, and release specs"
+  cross_repo_contracts: "APIs/events/packages/data contracts affected"
+  qa_strategy: "QA plan and acceptance ownership"
+  test_traceability: "Mapping from epic ACs to feature/task tests"
+  bug_policy: "How bugs are classified and handled during epic work"
+  clarification_route: "Where unresolved product/technical questions go"
+
+feature_fields:
+  id:
+  title:
+  repo:
+  tasks:
+  acceptance_criteria:
+  validation:
+  owner:
+  risk_level:
+  dependencies:
+  qa_focus_areas:
+  known_bugs:
+
+feature_done_requires:
+  - all_tasks_agent_done_or_deferred_with_approval
+  - feature_acceptance_criteria_validated
+  - qa_handoff_prepared
+  - known_bugs_classified
+  - manager_review_ready
+
+epic_done_requires:
+  - all_features_feature_done_or_deferred_with_approval
+  - epic_acceptance_criteria_validated
+  - cross_repo_contracts_validated_or_gaps_approved
+  - integration_or_e2e_validation_complete_or_documented
+  - qa_summary_prepared
+  - known_bugs_classified
+  - release_readiness_review_completed
+  - stakeholder_or_manager_acceptance_pending_or_completed

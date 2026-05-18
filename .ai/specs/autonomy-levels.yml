@@ -1,0 +1,101 @@
+version: 1
+
+default_level: L3
+
+levels:
+  L0:
+    name: "Read-only analysis"
+    allowed:
+      - read_repo
+      - summarize
+      - propose_plan
+    requires_human_before:
+      - code_changes
+      - branch_creation
+      - pr_creation
+
+  L1:
+    name: "Plan only"
+    allowed:
+      - read_repo
+      - create_task_breakdown
+      - identify_risks
+      - propose_implementation_plan
+    requires_human_before:
+      - code_changes
+      - pr_creation
+
+  L2:
+    name: "Branch implementation"
+    allowed:
+      - create_branch
+      - modify_code
+      - add_tests
+      - run_tests
+      - prepare_pr_body
+    requires_human_before:
+      - opening_pr
+      - merging
+      - deployment
+
+  L3:
+    name: "Open PR with tests"
+    allowed:
+      - create_branch
+      - modify_code
+      - add_tests
+      - run_tests
+      - open_pr
+      - comment_status
+      - continue_to_next_task
+    requires_human_before:
+      - merge
+      - deployment
+      - high_risk_changes
+
+  L4:
+    name: "Merge to non-production"
+    allowed:
+      - all_L3_actions
+      - merge_when_required_reviews_pass
+      - deploy_to_non_production_if_pipeline_allows
+    requires_human_before:
+      - production_deployment
+      - high_risk_changes
+      - repo_owner_exceptions
+
+  L5:
+    name: "Production operation"
+    allowed:
+      - production_deployment_only_when_explicitly_authorized
+    default_allowed: false
+    requires_human_before:
+      - all_production_changes
+
+repo_policy:
+  owned_repos:
+    max_default_level: L3
+  non_owned_repos:
+    max_default_level: L2
+    may_open_pr_only_when:
+      - owner_approval_exists
+      - task_identifies_repo_owner
+      - change_scope_is_small
+      - no_protected_paths_touched
+
+human_approval_required_for:
+  - auth
+  - authorization
+  - security
+  - billing
+  - payments
+  - production_config
+  - infrastructure
+  - database_migration
+  - data_deletion
+  - public_api_contract
+  - cross_repo_contract
+  - major_dependency_upgrade
+  - deployment_pipeline
+  - non_owned_repo
+  - destructive_operation

@@ -1,0 +1,68 @@
+version: 4
+name: Branch Promotion Policy
+
+branches:
+  spec_branches:
+    examples:
+      - dev/<feature>
+      - spec/<feature>
+      - chatgpt/<feature>
+    purpose: Receive specs created by ChatGPT/pro models.
+    agent_can_commit_implementation_directly: false
+
+  implementation_branches:
+    pattern: ai/<story-id>-<slug>
+    purpose: Agent implementation work.
+    pr_target: source_spec_branch
+    agent_can_create: true
+
+  qa_user_branches:
+    pattern: qa-user/<feature-or-story>
+    purpose: User/QA validation branch after QA pass.
+    agent_can_prepare: true
+    requires:
+      - qa_pass
+      - no_blocking_feedback
+      - test_evidence
+      - agents_log
+
+  staging_branches:
+    pattern: staging/<feature-or-release>
+    purpose: Staging validation.
+    agent_can_prepare: true
+    requires:
+      - qa_pass
+      - pm_pass
+      - release_readiness_pass
+      - manager_or_repo_owner_policy_allows
+
+  prod_ready_branches:
+    pattern: prod-ready/<feature-or-release>
+    purpose: Human AI PM and repo owner final review.
+    agent_can_prepare: true
+    requires:
+      - qa_pass
+      - pm_pass
+      - security_pass_when_relevant
+      - cloud_pass_when_relevant
+      - rollback_plan
+      - pr_notification
+
+  production_branches:
+    examples:
+      - main
+      - master
+      - production
+      - prod
+    agent_can_merge: false
+    agent_can_deploy: false
+    requires_human_approval: true
+
+promotion_artifacts:
+  - release_readiness_report
+  - rollback_plan
+  - qa_summary
+  - pm_summary
+  - agents_log_summary
+  - screenshots_when_ui
+  - risk_register

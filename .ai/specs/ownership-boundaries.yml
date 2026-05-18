@@ -1,0 +1,43 @@
+version: 1
+
+default_policy:
+  owned_repo_autonomy: L3
+  non_owned_repo_autonomy: L2
+  production_autonomy: L0
+
+required_metadata:
+  - repo_owner
+  - technical_owner
+  - business_owner
+  - default_reviewers
+  - protected_paths
+  - deployment_owner
+  - data_owner_if_applicable
+
+non_owned_repo_rules:
+  - produce_impact_analysis_first
+  - identify_owner_before_branching
+  - do_not_touch_protected_paths
+  - do_not_change_public_contracts_without_approval
+  - prefer_small_prs
+  - no_large_refactors
+  - no_deployment_changes
+  - no_migrations
+  - no_security_changes_without_owner
+
+cross_repo_change_rules:
+  - create_epic
+  - define_contract
+  - identify_all_owners
+  - sequence_prs
+  - add_compatibility_tests
+  - document_rollback
+  - manager_approval_required
+
+owner_approval_record:
+  required_fields:
+    - approver
+    - date
+    - scope
+    - repo
+    - expiration_or_task_id

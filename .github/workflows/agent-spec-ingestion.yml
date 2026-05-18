@@ -1,0 +1,93 @@
+name: Agent Spec Ingestion
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_issues:
+        description: Create GitHub issues for detected specs
+        required: false
+        default: 'true'
+      dry_run:
+        description: Generate task artifacts without creating issues or webhook calls
+        required: false
+        default: 'false'
+
+# v7 note: automatic spec-to-code execution is handled by agentic-spec-autostart.yml.
+# This legacy ingestion workflow is manual to avoid duplicate issues/PRs.
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  detect-and-dispatch-specs:
+    runs-on: ubuntu-latest
+    env:
+      CREATE_ISSUES: ${{ github.event.inputs.create_issues || 'true' }}
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      AGENT_DISPATCH_WEBHOOK_URL: ${{ secrets.AGENT_DISPATCH_WEBHOOK_URL }}
+    steps:
+      - name: Checkout source spec branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate ingestion scripts
+        run: |
+          python -m py_compile .ai/scripts/detect_new_specs.py
+          python -m py_compile .ai/scripts/spec_to_agent_task.py
+          python -m py_compile .ai/scripts/dispatch_spec_tasks.py
+          python -m py_compile .ai/scripts/spec-quality-check.py
+          python -m py_compile .ai/scripts/generate-test-matrix.py
+
+      - name: Detect new or modified specs
+        run: |
+          mkdir -p .agent/reports .agent/dispatch
+          python .ai/scripts/detect_new_specs.py \
+            --out .agent/reports/detected-specs.json \
+            --format markdown | tee .agent/reports/detected-specs.md
+          cat .agent/reports/detected-specs.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run spec quality and generate test matrices
+        run: |
+          python - <<'PY'
+          import json, pathlib, subprocess
+          report = json.loads(pathlib.Path('.agent/reports/detected-specs.json').read_text())
+          specs = report.get('specs', [])
+          out = pathlib.Path('.agent/reports/spec-quality')
+          out.mkdir(parents=True, exist_ok=True)
+          for item in specs:
+              spec = item['path']
+              safe = spec.replace('/', '__').replace(' ', '_')
+              quality = out / f'{safe}.quality.md'
+              matrix = out / f'{safe}.test-matrix.md'
+              with quality.open('w') as f:
+                  subprocess.check_call(['python', '.ai/scripts/spec-quality-check.py', '--spec', spec, '--format', 'markdown'], stdout=f)
+              with matrix.open('w') as f:
+                  subprocess.check_call(['python', '.ai/scripts/generate-test-matrix.py', '--spec', spec], stdout=f)
+              print(f'Generated quality report and test matrix for {spec}')
+          PY
+
+      - name: Dispatch specs as agent tasks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FLAGS=""
+          if [ "$CREATE_ISSUES" = "true" ]; then FLAGS="$FLAGS --create-issues"; fi
+          if [ "$DRY_RUN" = "true" ]; then FLAGS="$FLAGS --dry-run"; fi
+          python .ai/scripts/dispatch_spec_tasks.py \
+            --detected .agent/reports/detected-specs.json \
+            --out-dir .agent/dispatch \
+            $FLAGS | tee .agent/dispatch/dispatch-summary.json
+          echo "## Dispatch summary" >> "$GITHUB_STEP_SUMMARY"
+          cat .agent/dispatch/dispatch-summary.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload spec ingestion artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-spec-ingestion-${{ github.run_id }}
+          path: |
+            .agent/reports/**
+            .agent/dispatch/**

@@ -1,0 +1,77 @@
+version: 3
+name: Spec Comprehension Standard
+purpose: Ensure agents understand specs before implementation.
+
+required_sections:
+  business_goal:
+    required: true
+    description: The business or user outcome the work should enable.
+  technical_goal:
+    required: true
+    description: The concrete technical result expected.
+  stakeholders:
+    required: false
+    description: Users, owners, QA, support, operations, or affected teams.
+  current_behavior:
+    required: false
+  desired_behavior:
+    required: true
+  acceptance_criteria:
+    required: true
+    minimum_count: 1
+    id_format: AC-###
+  non_goals:
+    required: false
+  constraints:
+    required: true
+  assumptions:
+    required: true
+    id_format: A-###
+  ambiguities:
+    required: true
+    id_format: Q-###
+  risk_classification:
+    required: true
+  test_traceability:
+    required: true
+
+acceptance_criteria_quality:
+  must_be:
+    - observable
+    - testable
+    - bounded
+    - linked_to_user_or_system_behavior
+  must_not_be:
+    - vague
+    - purely subjective
+    - impossible_to_validate
+    - dependent_on_unapproved_external_state
+
+reading_passes:
+  pass_1: intent_and_business_value
+  pass_2: explicit_commitments_and_acceptance_criteria
+  pass_3: constraints_non_goals_and_risks
+  pass_4: implementation_boundaries_and_repo_reality
+  pass_5: testability_and_evidence_mapping
+
+failure_conditions:
+  block_implementation:
+    - missing_acceptance_criteria
+    - conflicting_acceptance_criteria
+    - public_contract_unclear
+    - security_or_auth_behavior_unclear
+    - data_deletion_or_migration_unclear
+    - ownership_unclear_for_non_owned_repo
+  allow_safe_progress:
+    - unclear_copy_or_text
+    - unclear_optional_edge_case
+    - missing_preferred_test_level
+    - missing_noncritical_ui_detail
+    - unknown_future_followup_scope
+
+required_output_artifacts:
+  - spec_comprehension_report
+  - acceptance_criteria_map
+  - clarification_list
+  - assumption_register
+  - test_traceability_matrix

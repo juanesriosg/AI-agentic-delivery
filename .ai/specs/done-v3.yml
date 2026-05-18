@@ -1,0 +1,35 @@
+version: 3
+name: Definition of Done v3
+agent_done_requires:
+  - spec_comprehension_completed
+  - acceptance_criteria_have_ids
+  - assumptions_documented
+  - clarification_questions_resolved_or_safe_assumptions_documented
+  - implementation_completed_for_in_scope_criteria
+  - unit_tests_run_or_gap_explained
+  - component_tests_run_when_relevant_or_gap_explained
+  - integration_tests_run_when_relevant_or_gap_explained
+  - contract_tests_run_when_relevant_or_gap_explained
+  - e2e_or_manual_dev_tests_run_when_relevant_or_gap_explained
+  - bugs_found_documented
+  - self_review_completed
+  - scale_security_reliability_review_completed
+  - pr_created_or_ready
+  - qa_handoff_prepared_for_feature_or_epic
+  - manager_notified
+
+feature_done_requires:
+  - all_tasks_agent_done_or_deferred_with_approval
+  - cross_task_acceptance_criteria_validated
+  - qa_handoff_prepared
+  - known_bugs_classified
+  - release_risk_documented
+  - manager_acceptance_pending_or_completed
+
+epic_done_requires:
+  - all_features_feature_done_or_deferred_with_approval
+  - epic_acceptance_criteria_validated
+  - integration_or_e2e_confidence_recorded
+  - qa_summary_prepared
+  - release_readiness_review_completed
+  - manager_acceptance_pending_or_completed

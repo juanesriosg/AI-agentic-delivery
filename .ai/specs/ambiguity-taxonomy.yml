@@ -1,0 +1,32 @@
+version: 3
+name: Ambiguity Taxonomy
+purpose: Help agents identify what kind of clarification is needed.
+
+types:
+  behavior:
+    description: Desired system behavior is unclear.
+    default_action: clarify_if_acceptance_depends_on_it
+  data_shape:
+    description: Fields, schema, or valid values are unclear.
+    default_action: inspect_contracts_then_clarify
+  ownership:
+    description: Repo, component, or decision owner is unclear.
+    default_action: escalate_before_risky_changes
+  security:
+    description: Permission, auth, privacy, or data handling behavior is unclear.
+    default_action: block_implementation_path
+  scale:
+    description: Expected volume, latency, or concurrency is unclear.
+    default_action: choose_bounded_design_and_document_assumption
+  test_oracle:
+    description: Expected result cannot be verified.
+    default_action: clarify_or_create_characterization_test
+  environment:
+    description: Required environment, credentials, or dependency unavailable.
+    default_action: use_local_fake_or_document_blocker
+  priority:
+    description: Tradeoff between time, quality, scope, and risk unclear.
+    default_action: propose_options_and_recommendation
+  contradiction:
+    description: Specs conflict.
+    default_action: block_affected_path_until_resolved

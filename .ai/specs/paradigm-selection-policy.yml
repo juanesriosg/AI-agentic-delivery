@@ -1,0 +1,30 @@
+schema: agentic.paradigm_selection_policy.v1
+principle: choose the simplest paradigm that preserves boundaries, testability, and scale.
+paradigms:
+  data_driven:
+    use_when:
+      - configurable rules
+      - transformations
+      - analytics
+      - mapping tables
+  object_oriented:
+    use_when:
+      - domain invariants
+      - encapsulated behavior
+      - strategy/adapter/factory/repository patterns are useful
+  event_driven:
+    use_when:
+      - asynchronous workflows
+      - queues or streams
+      - retries and idempotency
+      - system decoupling
+  functional_or_procedural:
+    use_when:
+      - small pure operations
+      - simple transformation without domain state
+anti_patterns:
+  - pattern_for_pattern_sake
+  - god_service
+  - anemic_domain_when_behavior_has_invariants
+  - hidden_global_state
+  - event_driven_without_idempotency

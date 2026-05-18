@@ -1,0 +1,12 @@
+# Optional Codex CLI user config example for this agentic SDLC.
+# Copy relevant lines into ~/.codex/config.toml if you want the same defaults
+# outside the automation scripts. The scripts also pass these flags explicitly.
+
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+model_reasoning_summary = "concise"
+model_verbosity = "high"
+
+# Keep agentic SDLC work local-first. Cloud mode is intentionally not configured
+# here; use --mode cloud plus AGENTIC_EXPLICIT_CLOUD=true only when you explicitly
+# choose cloud continuation.

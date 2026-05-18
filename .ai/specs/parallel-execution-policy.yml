@@ -1,0 +1,39 @@
+version: 4
+name: Parallel Agent Execution Policy
+
+principles:
+  - Parallelism should reduce cycle time without reducing traceability or quality.
+  - Agents may work in parallel only when contracts, file ownership, and merge order are clear.
+  - One agent can implement while another prepares tests or reviews, but conflicting edits are prohibited.
+
+wip_limits:
+  default_active_stories_per_repo: 3
+  default_active_agents_per_story: 6
+  max_agents_editing_same_story_code: 3
+  max_agents_editing_same_file_group: 1
+
+safe_parallel_patterns:
+  - name: API contract then split frontend/backend
+    required_precondition: API contract draft exists
+  - name: QA checklist while implementation continues
+    required_precondition: acceptance criteria are stable
+  - name: Visual baseline capture while dev codes
+    required_precondition: baseline app can run
+  - name: Cloud environment readiness while app code is implemented
+    required_precondition: environment scope is non-production and approved
+  - name: Accessibility review while frontend is in progress
+    required_precondition: component structure or mock exists
+
+unsafe_parallel_patterns:
+  - multiple_agents_edit_same_files
+  - frontend_and_backend_guess_different_contracts
+  - cloud_deploy_before_branch_policy_known
+  - database_migration_without_rollback_plan
+  - qa_pass_before_implementation_validation
+
+conflict_resolution:
+  - stop_conflicting_agent_edits
+  - assign_single_owner_agent
+  - create_feedback_or_followup
+  - rebase_or_merge_only_after_tests
+  - log_resolution_in_agents_log

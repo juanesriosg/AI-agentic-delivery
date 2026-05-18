@@ -1,0 +1,31 @@
+version: 2
+clean_code_standard:
+  principles:
+    clarity_over_cleverness: required
+    small_cohesive_units: required
+    explicit_domain_language: required
+    low_duplication_without_premature_abstraction: required
+    simple_control_flow: preferred
+    behavior_preserving_refactor: required_for_refactor_tasks
+  required_checks:
+    - meaningful_names
+    - functions_have_single_clear_responsibility
+    - no_unrelated_formatting
+    - no_dead_code_unless_deprecation_strategy_exists
+    - no_removed_validation_without_replacement
+    - no_removed_tests_without_approval
+    - edge_cases_are_handled
+    - errors_are_actionable
+    - code_is_easy_to_debug
+  review_questions:
+    - Would a new mid-level engineer understand this in under 15 minutes?
+    - Does each abstraction pay for itself?
+    - Are responsibilities split along stable boundaries?
+    - Is the code more testable after the change?
+    - Did the agent leave the codebase better without expanding scope?
+  blockers:
+    - broad_refactor_inside_feature_task
+    - pattern_added_without_reason
+    - tests_removed_to_pass_ci
+    - hidden_behavior_change_in_refactor
+    - duplicated_complex_logic

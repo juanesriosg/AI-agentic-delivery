@@ -1,0 +1,28 @@
+version: 4
+name: Database Quality Standard
+
+required_considerations:
+  - data_classification
+  - schema_compatibility
+  - migration_reversibility
+  - rollback_plan
+  - indexes_for_query_patterns
+  - lock_and_downtime_risk
+  - data_retention_and_deletion_policy
+  - backup_or_restore_implications
+  - query_bounds_and_pagination
+  - concurrency_and_consistency
+
+high_risk_operations:
+  - drop_table
+  - truncate_table
+  - destructive_migration
+  - broad_update_without_where
+  - data_deletion
+  - schema_change_requiring_downtime
+  - index_on_large_table_without_plan
+
+requires_human_approval:
+  - destructive_or_irreversible_change
+  - production_data_risk
+  - migration_with_downtime_risk

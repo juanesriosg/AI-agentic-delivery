@@ -1,0 +1,29 @@
+version: 2
+performance_budget:
+  feature_or_endpoint:
+  owner:
+  current_expected_usage:
+    requests_per_second:
+    users:
+    data_volume:
+  budgets:
+    p50_latency_ms:
+    p95_latency_ms:
+    p99_latency_ms:
+    max_memory_mb:
+    max_payload_kb:
+    max_db_queries_per_request:
+    max_external_calls_per_request:
+  validation:
+    benchmark_command:
+    load_test_command:
+    profiling_command:
+  observability:
+    metrics:
+      - latency
+      - error_rate
+      - saturation
+    logs:
+      - correlation_id
+      - failure_reason
+  notes:

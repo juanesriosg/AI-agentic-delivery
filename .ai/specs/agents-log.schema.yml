@@ -1,0 +1,51 @@
+version: 4
+name: Agents Log Schema
+format: jsonl
+path: .agent/agents.log.jsonl
+required_fields:
+  - timestamp_utc
+  - agent
+  - story_id
+  - stage
+  - action
+  - status
+fields:
+  iteration:
+    type: string_or_integer
+  input_refs:
+    type: list
+  output_refs:
+    type: list
+  evidence_refs:
+    type: list
+  feedback_refs:
+    type: list
+  notes:
+    type: string
+  risk:
+    allowed:
+      - none
+      - low
+      - medium
+      - high
+      - critical
+  next_agent:
+    type: string
+  next_action:
+    type: string
+allowed_status:
+  - started
+  - in_progress
+  - completed
+  - passed
+  - failed
+  - blocked
+  - feedback_created
+  - feedback_closed
+  - deferred
+  - escalated
+rules:
+  - Logs are append-only.
+  - Do not include secrets or credentials.
+  - Failed iterations must be logged.
+  - Corrections are appended, not rewritten.

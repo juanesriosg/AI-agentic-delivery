@@ -1,0 +1,13 @@
+# Project-local Codex defaults for the Agentic Delivery OS.
+# Loaded only after you trust the project in Codex.
+
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+web_search = "cached"
+
+# Manager policy note:
+# - Desired profile: GPT-5.5 "extra high".
+# - Current documented Codex config supports model_reasoning_effort="xhigh" when the selected model/account supports it.
+# - Override per run with AGENTIC_CODEX_REASONING_EFFORT if your account/CLI later supports a stronger level.

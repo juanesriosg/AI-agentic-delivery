@@ -1,0 +1,34 @@
+version: 4
+name: Visual Evidence Schema
+required_fields:
+  - story_id
+  - evidence_id
+  - generated_by_agent
+  - viewport
+  - state
+  - screenshot_path
+  - status
+fields:
+  viewport:
+    examples:
+      - mobile-390x844
+      - tablet-768x1024
+      - desktop-1440x900
+  state:
+    examples:
+      - empty
+      - valid
+      - invalid
+      - loading
+      - error
+      - success
+      - disabled
+  status:
+    allowed:
+      - pass
+      - fail
+      - blocked
+      - gap_documented
+  annotations:
+    type: list
+    item_schema: screenshot-annotation.schema.yml

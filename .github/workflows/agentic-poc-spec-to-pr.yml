@@ -1,0 +1,121 @@
+name: Agentic POC Spec to PR
+
+on:
+  push:
+    branches:
+      - 'dev/**'
+      - 'spec/**'
+      - 'chatgpt/**'
+      - 'ai-spec/**'
+      - 'feature/spec/**'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Spec branch to process. Defaults to current ref.
+        required: false
+      spec:
+        description: Optional spec path to process. If omitted, changed specs are detected.
+        required: false
+      mode:
+        description: local by default. Use cloud only with explicit opt-in.
+        required: false
+        default: local
+      dry_run:
+        description: Generate prompts/evidence only; do not run Codex or push.
+        required: false
+        default: 'false'
+      allow_cloud:
+        description: Explicitly allow cloud mode for this run. Must be true when mode=cloud.
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: agentic-poc-spec-to-pr-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  poc-spec-to-pr:
+    runs-on: ubuntu-latest
+    env:
+      CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+      AGENTIC_MODE: ${{ github.event.inputs.mode || 'local' }}
+      AGENTIC_MAX_SPECS: '3'
+      AGENTIC_CODEX_MODEL: 'gpt-5.5'
+      AGENTIC_CODEX_REASONING_EFFORT: 'xhigh'
+    steps:
+      - name: Checkout spec branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Configure Git author
+        run: |
+          git config --global user.name "ai-agentic-sdlc"
+          git config --global user.email "ai-agentic-sdlc@users.noreply.github.com"
+
+      - name: Validate automation scripts
+        run: |
+          python -m py_compile .ai/scripts/agentic_sdlc.py
+          python -m py_compile .ai/scripts/poc_to_pr.py
+          python -m py_compile .ai/scripts/validate_agentic_spec.py
+          python -m py_compile .ai/scripts/design_gate.py
+          python -m py_compile .ai/scripts/layer_gate.py
+          python -m py_compile .ai/scripts/branch_conflict_guard.py
+
+      - name: Run POC-to-PR agentic flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODE="${{ github.event.inputs.mode || 'local' }}"
+          ALLOW_CLOUD="${{ github.event.inputs.allow_cloud || 'false' }}"
+          if [ "$MODE" = "cloud" ] && [ "$ALLOW_CLOUD" != "true" ]; then
+            echo "Cloud mode is blocked by local-first policy. Set mode=cloud and allow_cloud=true only when explicitly intended." >&2
+            exit 2
+          fi
+          ARGS=(
+            --branch "${{ github.event.inputs.branch || github.ref_name }}"
+            --mode "$MODE"
+          )
+          if [ "$MODE" = "cloud" ]; then
+            export AGENTIC_EXPLICIT_CLOUD=true
+            ARGS+=(--allow-cloud)
+          fi
+          if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          if [ -n "${{ github.event.inputs.spec }}" ]; then
+            ARGS+=(--spec "${{ github.event.inputs.spec }}")
+          fi
+          python .ai/scripts/poc_to_pr.py "${ARGS[@]}"
+
+      - name: Upload agentic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-poc-spec-to-pr-${{ github.run_id }}
+          path: |
+            .agent/runs/**
+            .agent/state/**
+            docs/agentic-evidence/**
+          if-no-files-found: ignore

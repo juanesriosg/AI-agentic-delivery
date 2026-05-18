@@ -1,0 +1,35 @@
+version: 3
+name: Spec to Test Traceability Schema
+format: markdown_or_yaml
+required_fields:
+  task_id: string
+  repo: string
+  branch: string
+  acceptance_criteria:
+    type: list
+    item_required_fields:
+      - id
+      - text
+      - implementation_status
+      - validation_status
+      - evidence
+  tests:
+    type: list
+    item_required_fields:
+      - id
+      - level
+      - command_or_steps
+      - result
+      - covers_acceptance_criteria
+  gaps:
+    type: list
+    item_fields:
+      - acceptance_criterion
+      - reason
+      - risk
+      - follow_up
+
+status_values:
+  implementation_status: [not_started, in_progress, implemented, blocked, deferred]
+  validation_status: [not_tested, passed, failed, blocked, manual_only, not_applicable]
+  test_level: [spec_validation, static, unit, component, integration, contract, e2e, dev, qa, regression]

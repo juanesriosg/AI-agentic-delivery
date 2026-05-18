@@ -1,0 +1,24 @@
+version: 4
+name: Backend Quality Standard
+
+required_considerations:
+  - business_rule_clarity
+  - input_validation
+  - authentication_and_authorization
+  - error_semantics
+  - idempotency_when_relevant
+  - pagination_for_collections
+  - bounded_resource_use
+  - timeouts_and_retries_for_dependencies
+  - observability_logs_metrics_traces
+  - unit_integration_contract_tests
+  - rollback_and_backward_compatibility
+
+anti_patterns:
+  - unbounded_queries
+  - hidden_authorization_assumptions
+  - catching_and_ignoring_exceptions
+  - returning_ambiguous_errors
+  - global_mutable_state_without_concurrency_safety
+  - synchronous_long_running_work_in_request_path_without_reason
+  - changing_public_contract_without_contract_review

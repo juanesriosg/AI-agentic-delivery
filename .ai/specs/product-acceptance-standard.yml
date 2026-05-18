@@ -1,0 +1,21 @@
+version: 4
+name: Product Acceptance Standard
+
+pm_agent_must_review:
+  - business_goal_satisfied
+  - primary_user_can_complete_task
+  - flow_is_intuitive
+  - copy_is_clear
+  - errors_are_helpful
+  - app_integration_feels_consistent
+  - accessibility_basics_met
+  - no_unexpected_side_effects
+  - stakeholder_or_manager_decisions_needed
+
+pm_blocks_when:
+  - user_cannot_understand_primary_action
+  - completed_behavior_does_not_match_business_goal
+  - UI_pattern_conflicts_with_existing_app_without_reason
+  - accessibility_issue_blocks_task_completion
+  - critical_edge_case_confuses_or_misleads_user
+  - product_tradeoff_requires_human_AI_PM_decision

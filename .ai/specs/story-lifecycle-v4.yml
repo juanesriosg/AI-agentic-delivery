@@ -1,0 +1,137 @@
+version: 4
+name: Agentic Agile Story Lifecycle
+purpose: Define the state machine used by specialized agents from spec intake to human AI PM notification.
+
+states:
+  spec_detected:
+    description: A new or modified spec/user story has been found.
+    owner_agent: spec-ingestion-orchestrator
+    required_outputs:
+      - detected_spec_record
+      - story_id
+
+  requirements_review:
+    description: Requirements are read deeply, acceptance criteria are extracted, and clarifications are asked if needed.
+    owner_agent: product-requirements-agent
+    required_outputs:
+      - requirements_summary
+      - acceptance_criteria_with_ids
+      - assumption_register
+      - clarification_register
+
+  specialist_routing:
+    description: Orchestrator decides which specialist agents are required.
+    owner_agent: agile-delivery-orchestrator
+    required_outputs:
+      - routing_plan
+      - parallel_execution_plan
+      - story_workspace
+
+  design_architecture_review:
+    description: UX, UI, architecture, API, data, cloud, security, or other specialists review before coding when relevant.
+    owner_agent: agile-delivery-orchestrator
+    required_outputs:
+      - design_notes_or_not_applicable
+      - architecture_notes_or_not_applicable
+      - risk_notes
+
+  implementation:
+    description: Implementation agents code, test locally, self-review, and log progress.
+    owner_agent: assigned_engineering_agents
+    required_outputs:
+      - code_changes
+      - unit_or_component_tests
+      - implementation_notes
+      - self_review
+
+  developer_validation:
+    description: Dev agents run layered validation and fix issues discovered by themselves.
+    owner_agent: assigned_engineering_agents
+    required_outputs:
+      - validation_results
+      - test_matrix_update
+      - bugs_found_by_dev
+
+  qa_checklist_generation:
+    description: QA creates a story-specific checklist covering functionality, style, accessibility, integration, edge cases, and regression.
+    owner_agent: qa-checklist-engineer
+    required_outputs:
+      - qa_checklist_md
+      - qa_checklist_json
+
+  qa_review:
+    description: QA executes the checklist, creates feedback, and either passes or routes issues to owner agents.
+    owner_agent: qa-checklist-engineer
+    required_outputs:
+      - qa_results
+      - feedback_items_or_qa_pass
+      - visual_evidence_if_ui
+
+  qa_feedback_fix:
+    description: Owner agents fix QA feedback and rerun relevant tests.
+    owner_agent: routed_owner_agents
+    required_outputs:
+      - fix_notes
+      - regression_evidence
+      - updated_screenshots_if_ui
+
+  qa_regression_review:
+    description: QA verifies fixes and closes QA feedback.
+    owner_agent: qa-regression-engineer
+    required_outputs:
+      - closed_feedback_records
+      - qa_pass_decision
+
+  pm_review:
+    description: "PM Agent evaluates product acceptance: value, intuitiveness, accessibility, copy, integration, and user experience."
+    owner_agent: product-manager-acceptance
+    required_outputs:
+      - pm_checklist_md
+      - pm_results
+      - product_feedback_or_pm_pass
+
+  pm_feedback_fix:
+    description: Design/dev agents fix PM feedback and update evidence.
+    owner_agent: routed_owner_agents
+    required_outputs:
+      - pm_fix_notes
+      - updated_validation
+      - updated_visual_evidence_if_ui
+
+  post_pm_qa_review:
+    description: QA reruns relevant checklist items after PM-driven changes.
+    owner_agent: qa-regression-engineer
+    required_outputs:
+      - post_pm_qa_results
+      - qa_pass_decision
+
+  pm_acceptance:
+    description: PM Agent verifies PM feedback is closed and accepts the story.
+    owner_agent: product-manager-acceptance
+    required_outputs:
+      - pm_acceptance_decision
+      - human_pm_review_notes
+
+  release_readiness:
+    description: Release agent checks promotion policy and prepares qa-user/staging/prod-ready handoff.
+    owner_agent: release-train-engineer
+    required_outputs:
+      - release_readiness_report
+      - rollback_plan
+      - promotion_recommendation
+
+  human_ai_pm_notification:
+    description: Agents send the human AI PM a PR notification with evidence, screenshots, logs, summary, risk, and requested action.
+    owner_agent: release-train-engineer
+    required_outputs:
+      - pr_notification_md
+      - agents_log_summary
+      - screenshots_and_annotations
+
+terminal_states:
+  done_waiting_human_review:
+    description: Agent lifecycle is complete; human AI PM review is now required.
+  blocked_waiting_human_decision:
+    description: Progress cannot continue safely without human decision.
+  deferred_with_approval:
+    description: Work or risk is explicitly deferred by manager/repo owner.

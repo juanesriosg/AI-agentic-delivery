@@ -1,0 +1,45 @@
+version: 10.0
+policy_name: business_context_policy
+
+context_pack:
+  markdown_output: docs/agentic-business-context/context-pack.md
+  json_output: docs/agentic-business-context/context-pack.json
+  max_file_chars_default: 6000
+  max_total_chars_default: 120000
+
+include_sources:
+  specs:
+    - specs/**/*.md
+    - specs/**/*.yml
+    - specs/**/*.yaml
+    - docs/specs/**/*.md
+    - .ai/inbox/specs/**/*.md
+    - .codex/specs/**/*.md
+  business_rules:
+    - docs/business-rules/**/*.md
+    - .ai/specs/business-rules*.md
+  pr_evidence:
+    - docs/agentic-evidence/**/pr-notification.md
+    - docs/agentic-evidence/**/scale-security-architecture-review.md
+    - docs/agentic-evidence/**/data-analysis.md
+  qa_pm_evidence:
+    - docs/agentic-evidence/**/qa-checklist.md
+    - docs/agentic-evidence/**/pm-checklist.md
+  release_notes:
+    - docs/releases/**/*.md
+    - CHANGELOG.md
+
+exclude_sources:
+  - '**/_TEMPLATE*'
+  - '**/*.template.*'
+  - '**/node_modules/**'
+  - '**/.venv/**'
+  - '**/.agent/**/raw-results/**'
+  - '**/secrets/**'
+
+refresh_triggers:
+  - new_spec
+  - merged_pr
+  - new_business_question
+  - business_rule_change
+  - release_handoff

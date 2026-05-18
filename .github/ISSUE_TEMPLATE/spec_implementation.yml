@@ -1,0 +1,31 @@
+name: Agent Spec Implementation
+about: Task generated from a spec pushed to a development branch
+labels: ["ai:ready", "ai:from-spec"]
+body:
+  - type: input
+    id: source_branch
+    attributes:
+      label: Source spec branch
+      placeholder: dev/my-feature
+    validations:
+      required: true
+  - type: input
+    id: spec_path
+    attributes:
+      label: Spec path
+      placeholder: specs/my-feature.spec.md
+    validations:
+      required: true
+  - type: input
+    id: source_sha
+    attributes:
+      label: Source commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Agent task
+      description: Paste or generate the task body from .ai/scripts/spec_to_agent_task.py
+    validations:
+      required: true

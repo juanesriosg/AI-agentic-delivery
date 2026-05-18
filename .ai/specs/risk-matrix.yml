@@ -1,0 +1,56 @@
+version: 1
+
+risk_levels:
+  low:
+    description: "Small blast radius, easy rollback, good tests"
+    examples:
+      - docs
+      - tests
+      - isolated_bugfix
+      - small_internal_refactor
+      - noncritical_ui_copy
+    agent_may_proceed_to_pr: true
+
+  medium:
+    description: "Moderate blast radius or review complexity"
+    examples:
+      - feature_change
+      - multi_module_change
+      - error_handling_change
+      - external_integration_adjustment
+      - minor_dependency_upgrade
+    agent_may_proceed_to_pr: true
+    manager_attention_required: true
+
+  high:
+    description: "Large blast radius, sensitive area, hard rollback, or ownership complexity"
+    examples:
+      - auth
+      - authorization
+      - security
+      - billing
+      - payments
+      - infrastructure
+      - deployment_pipeline
+      - production_config
+      - database_migration
+      - data_deletion
+      - public_api_contract
+      - cross_repo_contract
+      - major_dependency_upgrade
+      - non_owned_repo
+    agent_must_escalate_before_implementation: true
+
+scoring:
+  dimensions:
+    - customer_impact
+    - security
+    - data_integrity
+    - rollback_difficulty
+    - blast_radius
+    - ownership_complexity
+    - test_confidence
+
+  low: "no dimension > 2"
+  medium: "any dimension == 3"
+  high: "any dimension >= 4"

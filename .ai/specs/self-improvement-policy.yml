@@ -1,0 +1,88 @@
+schema: agentic.self_improvement_policy.v1
+version: 15
+
+policy:
+  enabled: true
+  default_runtime_mode: local
+  cloud_allowed_only_when_explicit: true
+  runtime_agents_may_modify_skills: false
+  self_improvement_agent_may_propose_skill_diffs: true
+  human_review_required: true
+  codex_ai_review_required: true
+  self_merge_allowed: false
+
+cadence:
+  runtime_feedback_capture: every_task_or_pr
+  learning_loop: manual_or_scheduled
+  minimum_feedback_events: 3
+  minimum_distinct_sources: 2
+  minimum_eval_cases: 5
+  prevent_overfitting_to_single_event: true
+
+allowed_update_targets:
+  - .ai/agents/**/*.md
+  - .ai/skills/**/*.md
+  - .ai/specs/**/*.md
+  - .ai/specs/**/*.yml
+  - .ai/evals/**/*.json
+  - .ai/evals/**/*.md
+  - .ai/scripts/**/*.py
+  - .github/codex/prompts/**/*.md
+  - .github/ISSUE_TEMPLATE/**/*.yml
+  - .github/workflows/agentic-*.yml
+  - AGENTS.md
+  - README.md
+  - START_HERE.md
+
+blocked_without_explicit_manager_approval:
+  - expand_autonomy_level
+  - allow_production_deploy_without_human_review
+  - weaken_sql_readonly_policy
+  - weaken_terraform_policy
+  - weaken_branch_conflict_policy
+  - weaken_codex_pr_review
+  - weaken_qa_or_pm_gates
+  - allow_destructive_git_operations
+  - allow_protected_deletions
+  - remove_required_evals_without_replacement
+  - change_manager_identity
+
+required_pr_artifacts:
+  - docs/agentic-self-improvement/proposals/current-proposal.md
+  - docs/agentic-self-improvement/eval-report.md
+  - docs/agentic-self-improvement/feedback-bundle.json
+  - docs/agentic-self-improvement/changelog.md
+
+metrics:
+  output_level:
+    - useful_review_ratio
+    - accepted_correction_ratio
+    - spec_alignment_score
+    - test_gap_closure_rate
+  trajectory_level:
+    - right_files_inspected
+    - required_tools_run
+    - stopped_at_risky_boundary
+  system_level:
+    - cycle_time
+    - rework_rate
+    - merge_quality
+    - reviewer_trust
+    - noise_rate
+    - cost
+
+failure_controls:
+  skill_bloat:
+    max_core_skill_words: 900
+    require_deletion_or_refactor_when_over_limit: true
+  overfitting:
+    require_evidence_threshold: true
+    require_holdout_eval_for_core_skills: true
+  contradictory_feedback:
+    surface_conflicts_to_manager: true
+  reward_hacking:
+    grade_usefulness_not_activity: true
+  silent_drift:
+    require_changelog: true
+    require_eval_baseline: true
+    require_pr_review: true

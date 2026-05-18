@@ -1,0 +1,21 @@
+schema: agentic.skill_eval_case.v1
+required_fields:
+  - id
+  - skill
+  - level
+  - type
+  - scenario
+  - expected_behavior
+  - failure_conditions
+  - requires_human_calibration
+
+levels:
+  - easy
+  - realistic
+  - adversarial
+  - holdout
+
+types:
+  - code_based
+  - model_based
+  - human_calibrated

@@ -1,0 +1,20 @@
+schema: agentic.layer_dependency_gates.v1
+order:
+  - design
+  - cloud
+  - database
+  - api
+  - frontend
+  - qa
+  - pm
+  - release
+rules:
+  database_before_api: true
+  api_before_frontend: true
+  unit_tests_are_not_completion: true
+  mocks_are_not_final_integration: true
+  merge_required_for_next_layer: true
+pass_files:
+  database: docs/agentic-evidence/{spec_id}/layer-gates/database.passed.md
+  api: docs/agentic-evidence/{spec_id}/layer-gates/api.passed.md
+  frontend: docs/agentic-evidence/{spec_id}/layer-gates/frontend.passed.md

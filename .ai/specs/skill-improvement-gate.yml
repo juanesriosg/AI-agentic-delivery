@@ -1,0 +1,29 @@
+schema: agentic.skill_improvement_gate.v1
+version: 15
+
+required_checks:
+  - skill_guardrails
+  - skill_eval_runner
+  - codex_pr_review_gate
+  - human_manager_review
+
+branch_protection_recommended_checks:
+  - Agentic skill improvement gate / skill_improvement_gate
+  - Agentic Codex PR Review / codex_review_gate
+
+blocking_conditions:
+  - missing_proposal
+  - missing_eval_report
+  - missing_feedback_bundle
+  - skill_bloat_without_refactor
+  - safety_policy_weakened
+  - autonomy_expanded_without_approval
+  - deployment_permission_expanded_without_approval
+  - sql_readonly_policy_weakened
+  - terraform_policy_weakened
+  - qa_pm_gate_weakened
+  - branch_conflict_policy_weakened
+  - codex_review_gate_weakened
+  - contradictory_skill_instruction
+  - eval_cases_removed_without_replacement
+  - self_merge_attempt

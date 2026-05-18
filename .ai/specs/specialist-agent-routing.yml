@@ -1,0 +1,161 @@
+version: 4
+name: Specialist Agent Routing Rules
+
+default_agents:
+  always:
+    - agile-delivery-orchestrator
+    - product-requirements-agent
+    - qa-checklist-engineer
+    - qa-regression-engineer
+    - product-manager-acceptance
+    - agent-scribe-logger
+    - agent-feedback-coordinator
+
+routing:
+  ui_or_frontend:
+    triggers:
+      - component
+      - form
+      - page
+      - route
+      - CSS
+      - style
+      - placeholder
+      - button
+      - modal
+      - visual
+      - responsive
+    agents:
+      - frontend-engineer
+      - ui-designer
+      - visual-qa-engineer
+      - accessibility-qa-engineer
+      - design-system-agent
+
+  backend_or_api:
+    triggers:
+      - endpoint
+      - API
+      - service
+      - controller
+      - resolver
+      - business logic
+      - validation
+      - authentication
+      - authorization
+    agents:
+      - backend-engineer
+      - api-contract-engineer
+      - integration-engineer
+      - security-engineer
+
+  data_or_database:
+    triggers:
+      - database
+      - migration
+      - table
+      - index
+      - query
+      - persistence
+      - retention
+      - analytics data
+    agents:
+      - database-engineer
+      - backend-engineer
+      - security-engineer
+      - performance-engineer
+      - scalability-architect
+
+  cloud_or_infrastructure:
+    triggers:
+      - AWS
+      - cloud
+      - terraform
+      - cloudformation
+      - kubernetes
+      - helm
+      - ecs
+      - eks
+      - lambda
+      - deployment
+      - environment
+      - IAM
+      - secrets
+    agents:
+      - cloud-platform-engineer
+      - devops-cicd-engineer
+      - security-engineer
+      - sre-reliability-engineer
+      - release-train-engineer
+
+  performance_or_scale:
+    triggers:
+      - slow
+      - latency
+      - throughput
+      - memory
+      - concurrency
+      - queue
+      - cache
+      - pagination
+      - batch
+      - billion
+      - scale
+    agents:
+      - performance-engineer
+      - scalability-architect
+      - sre-reliability-engineer
+      - database-engineer
+
+  product_or_ux:
+    triggers:
+      - intuitive
+      - onboarding
+      - customer
+      - user flow
+      - copy
+      - usability
+      - accessibility
+      - product
+      - stakeholder
+    agents:
+      - product-manager-acceptance
+      - ux-researcher
+      - ui-designer
+      - accessibility-qa-engineer
+
+  release_or_branching:
+    triggers:
+      - qa-user
+      - staging
+      - production
+      - prod-ready
+      - release
+      - deploy
+      - promotion
+    agents:
+      - release-train-engineer
+      - release-readiness
+      - cloud-platform-engineer
+      - devops-cicd-engineer
+
+rules:
+  - name: User-facing stories require PM review
+    when: ui_or_frontend or product_or_ux or backend_or_api
+    require_agents:
+      - product-manager-acceptance
+  - name: UI changes require visual QA and accessibility QA
+    when: ui_or_frontend
+    require_agents:
+      - visual-qa-engineer
+      - accessibility-qa-engineer
+  - name: Cloud changes use Well-Architected review
+    when: cloud_or_infrastructure
+    require_agents:
+      - cloud-platform-engineer
+      - security-engineer
+      - sre-reliability-engineer
+  - name: Data deletion requires human approval
+    when: data_or_database
+    require_human: true
+    condition: destructive_or_irreversible

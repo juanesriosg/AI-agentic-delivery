@@ -1,0 +1,72 @@
+name: Bugfix for Agent
+description: Bug report with enough structure for an AI bugfix agent.
+title: "[Bug]: "
+labels: ["ai:ready", "bug"]
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, traces
+    validations:
+      required: false
+
+  - type: input
+    id: repo
+    attributes:
+      label: Repository
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - Bug is fixed.
+        - Regression test is added where feasible.
+        - Relevant tests pass.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk level
+      options:
+        - low
+        - medium
+        - high
+    validations:
+      required: true
+
+  - type: input
+    id: owner
+    attributes:
+      label: Human owner/reviewer
+    validations:
+      required: true

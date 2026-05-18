@@ -1,0 +1,72 @@
+version: 1
+name: Codex PR Review Policy
+purpose: >-
+  Require every pull request to receive an independent Codex AI review before
+  the human AI PM / senior developer approves or merges it.
+
+default: required
+applies_to:
+  - all pull requests created by agents
+  - all pull requests created by humans when the repository opts into this kit
+  - all pull requests targeting dev, qa-user, staging, prod-ready, main, or production branches
+
+required_status_check:
+  workflow: Agentic Codex PR Review
+  job: codex_review_gate
+  branch_protection_name: Agentic Codex PR Review / codex_review_gate
+
+review_channels:
+  required_ci_gate:
+    mechanism: openai/codex-action@v1
+    prompt: .github/codex/prompts/pr-review.md
+    output: .agent/codex-review/codex-output.md
+    parser: .ai/scripts/codex_pr_review_gate.py
+    required_secret: OPENAI_API_KEY
+    pass_condition: final marker codex-pr-review-status is PASS
+  optional_official_codex_mention:
+    mechanism: PR comment containing '@codex review'
+    workflow: .github/workflows/agentic-codex-review-request.yml
+    dependency: Codex GitHub integration must be enabled for the repo
+    note: This is useful as a teammate-style review comment, but the CI gate is the required merge control.
+
+human_approval_rule:
+  manager_may_approve_only_after:
+    - QA gate passed
+    - PM acceptance gate passed for user stories/features
+    - Dev-manager PR governor passed
+    - Codex PR Review required status check passed
+    - all P0/P1 Codex findings are fixed or explicitly accepted by the human manager
+
+codex_pass_criteria:
+  - single responsibility per PR
+  - source spec and acceptance criteria are satisfied or gaps are explicit
+  - tests are appropriate for risk and change type
+  - QA/PM evidence is present when required
+  - screenshots or visual evidence are present for UI changes
+  - security risks are reviewed
+  - reliability and scale risks are reviewed
+  - AWS components are defined through Terraform/IaC when applicable
+  - rollback path is documented
+  - no protected deletion or destructive behavior is hidden
+
+codex_fail_criteria:
+  - P0/P1 bug, security, data-loss, auth, payment, infra, migration, or production-risk finding
+  - multi-responsibility PR without explicit manager override
+  - missing relevant tests or fake/pending evidence
+  - unclear or unreviewable implementation
+  - raw AWS mutation or deployment path instead of Terraform/GitHub workflow
+  - likely regression in user flow, API contract, data model, or permissions
+
+allowed_overrides:
+  human_manager_override:
+    allowed: true
+    requirements:
+      - comment on the PR explaining the tradeoff
+      - label the PR ai:codex-review-human-override
+      - preserve the failing Codex review as evidence
+      - never override secrets exposure, destructive deletion, or production credential risk without security owner approval
+
+security_notes:
+  - Do not pass secrets, hidden repository data, or untrusted PR text to Codex beyond what the workflow needs for review.
+  - Prefer pull_request for the required Codex Action review because it checks out the PR merge commit with read permissions.
+  - pull_request_target may only be used for safe comment/label automation that does not execute untrusted code.

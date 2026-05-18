@@ -1,0 +1,42 @@
+version: 1
+
+task_metrics:
+  task_id: string
+  epic_id: string_optional
+  repo: string
+  agent_id: string
+  branch: string
+  pr_url: string_optional
+  started_at: datetime
+  completed_at: datetime_optional
+  state: enum
+  files_changed: integer
+  lines_added: integer
+  lines_deleted: integer
+  tests_run: list
+  tests_passed: boolean
+  lint_status: string
+  typecheck_status: string
+  build_status: string
+  coverage_delta: number_optional
+  ci_failures: integer
+  rework_cycles: integer
+  blocked_minutes: integer
+  blocked_reason: string_optional
+  risk_level: enum
+  quality_score: number
+  manager_decision: string_optional
+
+daily_metrics:
+  date: date
+  repos: list
+  tasks_completed: integer
+  prs_ready: integer
+  prs_merged: integer
+  blocked_count: integer
+  high_risk_count: integer
+  ci_pass_rate: number
+  average_pr_size: number
+  average_review_age_hours: number
+  repeated_blockers: list
+  recommendations: list

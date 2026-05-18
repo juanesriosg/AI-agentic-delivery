@@ -1,0 +1,126 @@
+name: Agentic Codex PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: agentic-codex-pr-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+jobs:
+  codex_review_gate:
+    name: codex_review_gate
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_BASE: ${{ github.event.pull_request.base.ref }}
+      PR_HEAD: ${{ github.event.pull_request.head.ref }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+    steps:
+      - name: Checkout PR merge commit
+        uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
+
+      - name: Pre-fetch base and PR head refs
+        run: |
+          git fetch --no-tags origin \
+            "${{ github.event.pull_request.base.ref }}" \
+            "+refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/origin/pr-${{ github.event.pull_request.number }}-head" || true
+
+      - name: Prepare Codex review workspace
+        run: |
+          mkdir -p .agent/codex-review
+          cat > .agent/codex-review/pr-context.md <<'EOF'
+          # Pull request context
+
+          PR: ${{ github.event.pull_request.number }}
+          Title: ${{ github.event.pull_request.title }}
+          Author: ${{ github.event.pull_request.user.login }}
+          Base: ${{ github.event.pull_request.base.ref }}
+          Head: ${{ github.event.pull_request.head.ref }}
+          Head SHA: ${{ github.event.pull_request.head.sha }}
+          EOF
+
+      - name: Run Codex AI reviewer
+        id: run_codex
+        continue-on-error: true
+        uses: openai/codex-action@v1
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/pr-review.md
+          output-file: .agent/codex-review/codex-output.md
+          model: gpt-5.5
+          effort: xhigh
+          safety-strategy: drop-sudo
+          sandbox: read-only
+
+      - name: Enforce Codex PR review decision
+        id: gate
+        env:
+          CODEX_ACTION_OUTCOME: ${{ steps.run_codex.outcome }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python .ai/scripts/codex_pr_review_gate.py \
+            --output .agent/codex-review/codex-output.md \
+            --report .agent/codex-review/codex-pr-review-gate.md \
+            --json .agent/codex-review/codex-pr-review-gate.json
+
+      - name: Upload Codex review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-pr-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: |
+            .agent/codex-review/codex-output.md
+            .agent/codex-review/codex-pr-review-gate.md
+            .agent/codex-review/codex-pr-review-gate.json
+          if-no-files-found: warn
+
+      - name: Post Codex review gate comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const reportPath = '.agent/codex-review/codex-pr-review-gate.md';
+            const jsonPath = '.agent/codex-review/codex-pr-review-gate.json';
+            const marker = '<!-- agentic-codex-pr-review-gate -->';
+            const fallbackReport = ['# Codex PR Review Gate', '', 'Status: FAIL', '', 'No report was generated.'].join(String.fromCharCode(10));
+            let report = fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : fallbackReport;
+            let result = {};
+            if (fs.existsSync(jsonPath)) {
+              try { result = JSON.parse(fs.readFileSync(jsonPath, 'utf8')); } catch (e) { result = {}; }
+            }
+            const status = result.passed ? 'PASS' : 'FAIL';
+            const body = [marker, `# Codex AI review gate: ${status}`, '', report].join(String.fromCharCode(10));
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
+            const existing = comments.find(c => c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body});
+            }

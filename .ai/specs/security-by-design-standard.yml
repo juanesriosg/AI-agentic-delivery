@@ -1,0 +1,28 @@
+version: 2
+security_by_design_standard:
+  principles:
+    least_privilege: required
+    defense_in_depth: required
+    secure_defaults: required
+    no_secrets_in_code: required
+    validate_input_at_boundaries: required
+    authorize_on_server_side: required
+    protect_data_in_transit_and_at_rest: required_when_applicable
+    trace_security_relevant_actions: required_when_applicable
+  required_checks:
+    - input_validation
+    - authorization
+    - authentication_boundary
+    - secrets_detection
+    - dependency_risk
+    - sensitive_logging
+    - injection_risk
+    - unsafe_deserialization
+    - data_exposure
+  blockers:
+    - hardcoded_secret
+    - raw_sql_with_untrusted_input
+    - authorization_removed_or_weakened
+    - sensitive_data_logged
+    - production_credentials_required_for_test
+    - public_endpoint_without_auth_review

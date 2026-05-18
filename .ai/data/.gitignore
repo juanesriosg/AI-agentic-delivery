@@ -1,0 +1,4 @@
+*.local.yml
+*.local.yaml
+*.local.json
+*.env

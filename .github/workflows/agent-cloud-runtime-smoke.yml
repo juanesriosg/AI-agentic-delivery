@@ -1,0 +1,29 @@
+name: Agent Cloud Runtime Smoke Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - AGENTS.md
+      - '.ai/**'
+      - '.codex/**'
+      - '.github/workflows/agent-cloud-runtime-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect runtime
+        run: .ai/scripts/detect-runtime.sh
+      - name: Bootstrap task env
+        env:
+          AGENT_TASK_ID: smoke-test
+        run: .ai/scripts/bootstrap-task-env.sh
+      - name: Agent quality gate
+        env:
+          AGENT_TASK_ID: smoke-test
+        run: .ai/scripts/run-agent-quality-gate.sh

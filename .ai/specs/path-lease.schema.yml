@@ -1,0 +1,34 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: agentic.path-lease.schema.yml
+title: Agentic Path Lease
+required:
+  - schema
+  - branch
+  - task_id
+  - reserved_paths
+  - created_at
+properties:
+  schema:
+    const: agentic.path-lease.v1
+  branch:
+    type: string
+  story_id:
+    type: string
+  task_id:
+    type: string
+  mode:
+    type: string
+    enum: [preflight, postflight, pr, manual]
+  reserved_paths:
+    type: array
+    items:
+      type: string
+  created_at:
+    type: string
+  expires_policy:
+    type: string
+  rules:
+    type: array
+    items:
+      type: string
+additionalProperties: true

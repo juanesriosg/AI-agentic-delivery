@@ -1,0 +1,91 @@
+name: Agentic self-improvement proposal
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Create proposal artifacts only; do not invoke Codex.
+        required: false
+        default: 'true'
+      create_pr:
+        description: Open a self-improvement PR. Requires dry_run=false.
+        required: false
+        default: 'false'
+  schedule:
+    - cron: '0 13 * * 5'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+concurrency:
+  group: agentic-self-improvement
+  cancel-in-progress: false
+
+jobs:
+  self_improvement:
+    runs-on: ubuntu-latest
+    env:
+      CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      AGENTIC_CODEX_MODEL: gpt-5.5
+      AGENTIC_CODEX_REASONING_EFFORT: xhigh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Codex CLI when needed
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        run: npm install -g @openai/codex
+
+      - name: Configure Git author
+        run: |
+          git config --global user.name "ai-skill-improver"
+          git config --global user.email "ai-skill-improver@users.noreply.github.com"
+
+      - name: Validate self-improvement scripts
+        run: |
+          python -m py_compile .ai/scripts/capture_agent_feedback.py
+          python -m py_compile .ai/scripts/skill_improvement_loop.py
+          python -m py_compile .ai/scripts/skill_eval_runner.py
+          python -m py_compile .ai/scripts/skill_guardrails.py
+          python -m py_compile .ai/scripts/harvest_github_feedback.py
+
+      - name: Harvest GitHub feedback
+        run: |
+          python .ai/scripts/harvest_github_feedback.py --limit 50
+
+      - name: Run self-improvement loop
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(run-once)
+          if [ "${{ github.event.inputs.dry_run || 'true' }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          if [ "${{ github.event.inputs.create_pr || 'false' }}" = "true" ] && [ "${{ github.event.inputs.dry_run || 'true' }}" = "false" ]; then
+            ARGS+=(--create-branch --open-pr)
+          fi
+          python .ai/scripts/skill_improvement_loop.py "${ARGS[@]}"
+
+      - name: Upload self-improvement artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-self-improvement-${{ github.run_id }}
+          path: |
+            .agent/self-improvement/**
+            .agent/feedback/**
+            docs/agentic-self-improvement/**
+          if-no-files-found: ignore

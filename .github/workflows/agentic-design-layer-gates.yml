@@ -1,0 +1,49 @@
+name: Agentic design and layer gates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  design_layer_gates:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate scripts
+        run: |
+          python -m py_compile .ai/scripts/design_gate.py .ai/scripts/layer_gate.py .ai/scripts/generate_layered_test_matrix.py
+
+      - name: Check design gate for changed specs
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}" --depth=1 || true
+          SPECS=$(git diff --name-only "$BASE...HEAD" | grep -E '(^specs/|docs/specs/|requirements/specs/).*(\.spec\.md|\.md|\.yml|\.yaml)$' || true)
+          if [ -z "$SPECS" ]; then
+            echo "No changed specs to validate."
+            exit 0
+          fi
+          for spec in $SPECS; do
+            if [ -f "$spec" ]; then
+              python .ai/scripts/design_gate.py --spec "$spec" --allow-not-applicable --markdown-output ".agent/design-gate-${spec//\//_}.md"
+            fi
+          done
+
+      - name: Validate layer gate evidence when present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d docs/agentic-evidence ]; then
+            echo "No agentic evidence directory yet."
+            exit 0
+          fi
+          find docs/agentic-evidence -path '*/layer-gates/*.passed.md' -print | while read -r passfile; do
+            grep -q 'Status: PASS' "$passfile"
+          done

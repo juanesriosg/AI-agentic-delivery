@@ -1,0 +1,41 @@
+name: Agent Branch Promotion Gates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - 'qa-user/**'
+      - 'staging/**'
+      - 'prod-ready/**'
+      - main
+      - master
+      - production
+      - prod
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  promotion-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check production branch protection policy
+        if: github.base_ref == 'main' || github.base_ref == 'master' || github.base_ref == 'production' || github.base_ref == 'prod'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const required = ["QA", "PM", "Rollback", "Human AI PM"];
+            const missing = required.filter(x => !body.toLowerCase().includes(x.toLowerCase()));
+            if (missing.length) {
+              core.setFailed(`Production-targeting PR must explicitly include: ${missing.join(", ")}`);
+            }
+            core.warning("Agents must not merge or deploy production by default. Human approval is required.");
+
+      - name: Validate promotion policy file
+        run: |
+          test -f .ai/specs/branch-promotion-policy.yml
+          grep -q "agent_can_deploy: false" .ai/specs/branch-promotion-policy.yml

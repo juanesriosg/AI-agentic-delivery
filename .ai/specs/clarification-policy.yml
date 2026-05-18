@@ -1,0 +1,47 @@
+version: 3
+name: Clarification Policy
+purpose: Ask useful questions while maintaining forward progress.
+
+principles:
+  - Clarifications should be specific, minimal, and tied to an acceptance criterion or risk.
+  - Agents should not ask managers to restate the whole task.
+  - Agents should continue safe progress while waiting.
+  - Agents must not implement high-risk guesses.
+  - Assumptions must be visible in PRs and notifications.
+
+clarification_types:
+  blocking:
+    description: Cannot safely implement without answer.
+    examples:
+      - Which users may access this data?
+      - Does this public API change require backward compatibility?
+      - Should deletion be soft or hard delete?
+    action: ask_question_and_pause_specific_implementation_path
+  non_blocking:
+    description: Work can continue with a safe assumption.
+    examples:
+      - Exact UI copy not provided.
+      - Preferred filename not specified.
+    action: document_assumption_and_continue
+  manager_decision:
+    description: Requires product, risk, priority, or architecture choice.
+    action: escalate_with_options_tradeoffs_and_recommendation
+  repo_owner_decision:
+    description: Requires approval from owner of non-owned repo or protected area.
+    action: prepare_analysis_no_risky_change
+
+question_format:
+  required_fields:
+    - id
+    - related_acceptance_criteria
+    - question
+    - why_it_matters
+    - options
+    - recommended_option
+    - safe_assumption_if_unanswered
+    - safe_progress_while_waiting
+
+continuous_progress_required: true
+max_questions_per_message: 5
+batch_related_questions: true
+avoid_questions_answerable_from_repo: true

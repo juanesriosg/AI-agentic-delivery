@@ -1,0 +1,34 @@
+version: 3
+name: QA Readiness Standard
+purpose: Define when a task, feature, or epic is ready for QA review.
+
+qa_ready_requires:
+  - acceptance_criteria_mapped
+  - automated_validation_completed_or_gaps_explained
+  - manual_qa_steps_documented
+  - test_data_documented
+  - environment_documented
+  - known_bugs_documented
+  - risk_level_documented
+  - rollback_or_disablement_path_documented
+  - manager_or_owner_decisions_resolved
+
+cannot_be_qa_ready_if:
+  - blocking_clarifications_open
+  - critical_or_high_unresolved_bug_blocks_acceptance
+  - validation_evidence_missing
+  - public_contract_change_unreviewed
+  - security_or_auth_change_unreviewed
+  - migration_or_infrastructure_change_unapproved
+
+qa_handoff_sections:
+  - feature_summary
+  - acceptance_criteria_status
+  - automated_test_results
+  - manual_qa_steps
+  - test_data
+  - bugs_found
+  - known_gaps
+  - focus_areas
+  - rollback_notes
+  - release_risk

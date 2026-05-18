@@ -1,0 +1,106 @@
+name: Agentic Data Analysis Request
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+  workflow_dispatch:
+    inputs:
+      question:
+        description: Business question to analyze
+        required: true
+        type: string
+      time_range:
+        description: Optional time range
+        required: false
+        type: string
+      mode:
+        description: Run mode
+        required: true
+        default: plan_only
+        type: choice
+        options:
+          - plan_only
+          - query_if_readonly_secret_available
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: agentic-data-analysis-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  data_analysis:
+    name: data_analysis
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          contains(toJson(github.event.issue.labels), 'ai:data-question') }}
+    runs-on: ubuntu-latest
+    env:
+      AGENTIC_DB_DSN_READONLY: ${{ secrets.AGENTIC_DB_DSN_READONLY }}
+      DATA_QUESTION: ${{ github.event.inputs.question || github.event.issue.title }}
+      DATA_TIME_RANGE: ${{ github.event.inputs.time_range || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build business context pack
+        run: |
+          python .ai/scripts/build_business_context.py \
+            --output docs/agentic-business-context/context-pack.md \
+            --json-output docs/agentic-business-context/context-pack.json
+
+      - name: Prepare data analysis prompt context
+        run: |
+          mkdir -p .agent/data-analysis
+          cat > .agent/data-analysis/request.md <<'EOF'
+          # Data analysis request
+
+          Question: ${{ github.event.inputs.question || github.event.issue.title }}
+          Time range: ${{ github.event.inputs.time_range || '' }}
+
+          Issue body:
+          ${{ github.event.issue.body || '' }}
+          EOF
+
+      - name: Run Codex Data Analyst
+        id: codex_data_analysis
+        continue-on-error: true
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/data-analysis.md
+          output-file: .agent/data-analysis/codex-data-analysis-output.md
+          safety-strategy: drop-sudo
+          sandbox: workspace-write
+
+      - name: Upload data analysis evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-data-analysis-${{ github.event.issue.number || github.run_id }}
+          path: |
+            .agent/data-analysis/**
+            docs/agentic-business-context/context-pack.md
+            docs/agentic-business-context/context-pack.json
+          if-no-files-found: warn
+
+      - name: Comment data analysis answer on issue
+        if: ${{ always() && github.event_name == 'issues' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.issue.number;
+            const marker = '<!-- agentic-data-analysis-answer -->';
+            let body = marker + '\n# Agentic Data Analysis\n\n';
+            const output = '.agent/data-analysis/codex-data-analysis-output.md';
+            if (fs.existsSync(output)) {
+              body += fs.readFileSync(output, 'utf8');
+            } else {
+              body += 'No Codex data analysis output was generated. Check the workflow artifacts.';
+            }
+            await github.rest.issues.createComment({owner, repo, issue_number, body});

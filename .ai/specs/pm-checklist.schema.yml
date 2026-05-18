@@ -1,0 +1,35 @@
+version: 4
+name: PM Checklist Schema
+required_fields:
+  - story_id
+  - checklist_id
+  - generated_by_agent
+  - generated_at
+  - business_goal
+  - items
+item_fields:
+  - id
+  - category
+  - question
+  - expected_product_outcome
+  - status
+  - evidence
+  - feedback_if_failed
+  - owner_agent_if_failed
+categories:
+  - user_value
+  - intuitiveness
+  - information_architecture
+  - copy_and_language
+  - accessibility_inclusion
+  - integration_with_app
+  - onboarding_or_discoverability
+  - edge_cases
+  - product_risk
+  - stakeholder_alignment
+allowed_status:
+  - pass
+  - fail
+  - blocked
+  - not_applicable
+  - manager_decision_needed

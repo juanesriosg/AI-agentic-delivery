@@ -1,0 +1,29 @@
+# Copy to .ai/data/database-connections.local.yml and do not commit real secrets.
+# Prefer environment variables over literal DSNs.
+
+connections:
+  - name: local_sqlite_example
+    driver: sqlite
+    dsn_env_var: AGENTIC_DB_DSN_READONLY
+    example_dsn: sqlite:///./data/app.db
+    environment: local
+    readonly_required: true
+    max_rows: 500
+    statement_timeout_seconds: 30
+    pii_allowed: false
+
+  - name: analytics_postgres_example
+    driver: postgres
+    dsn_env_var: AGENTIC_DB_DSN_READONLY
+    example_dsn: postgresql://readonly_user:REDACTED@analytics.example.com:5432/app
+    environment: warehouse
+    readonly_required: true
+    allowed_schemas:
+      - public
+      - analytics
+    blocked_tables:
+      - secrets
+      - credentials
+    max_rows: 1000
+    statement_timeout_seconds: 30
+    pii_allowed: false

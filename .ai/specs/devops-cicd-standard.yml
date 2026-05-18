@@ -1,0 +1,14 @@
+version: 4
+name: DevOps CI/CD Standard
+
+required_considerations:
+  - deterministic_bootstrap
+  - task_scoped_virtual_environment
+  - install_commands_documented
+  - lint_typecheck_test_build_commands_documented
+  - artifacts_uploaded_for_logs_screenshots_reports
+  - no_secrets_in_logs
+  - retries_only_for_flaky_external_dependencies
+  - CI_not_weakened_to_pass
+  - branch_promotion_gates_enforced
+  - production_deploys_disabled_by_default

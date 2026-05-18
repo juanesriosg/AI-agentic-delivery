@@ -1,0 +1,50 @@
+name: Agentic User Story
+about: Create a user story for the v4 agentic agile workflow
+labels: [ai:ready, user-story]
+body:
+  - type: input
+    id: story_id
+    attributes:
+      label: Story ID
+      placeholder: STORY-001
+  - type: textarea
+    id: business_goal
+    attributes:
+      label: Business goal
+      description: What user/business outcome should this deliver?
+    validations:
+      required: true
+  - type: textarea
+    id: user_story
+    attributes:
+      label: User story
+      placeholder: As a user, I want..., so that...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        AC-001: ...
+        AC-002: ...
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints / non-goals / risks
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact areas
+      multiple: true
+      options:
+        - frontend/ui
+        - backend/api
+        - database/data
+        - cloud/infrastructure
+        - design/ux
+        - security
+        - performance/scale
+        - release/deployment

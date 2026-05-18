@@ -1,0 +1,71 @@
+version: 1
+policy_name: branch-conflict-avoidance
+summary: >
+  Agents must not create PRs that touch the same implementation file as another active non-main branch.
+
+defaults:
+  enabled: true
+  block_on_overlap: true
+  scan_remote_branches: true
+  scan_local_branches: true
+  write_path_leases: true
+  commit_path_leases: true
+  push_path_leases: true
+  compare_active_branches_against: main
+  compare_current_branch_against: source_spec_branch
+
+active_branch_scope:
+  include:
+    - '*'
+  exclude:
+    - main
+    - master
+    - develop
+    - production
+    - prod
+    - gh-readonly-queue/**
+
+non_implementation_paths_ignored_for_conflicts:
+  - .agent/**
+  - docs/agentic-evidence/**
+  - docs/agentic-path-leases/**
+  - node_modules/**
+  - dist/**
+  - build/**
+  - target/**
+  - __pycache__/**
+
+blocking_overlap_examples:
+  - src/components/RegisterForm.tsx
+  - src/api/users.ts
+  - infra/terraform/lambda.tf
+  - database/migrations/20260515_create_users.sql
+  - .github/workflows/deploy.yml
+
+allowed_without_manager_approval:
+  - adding a new isolated file with no shared path overlap
+  - adding branch-specific evidence under docs/agentic-evidence/<story>/<task>/
+  - adding branch-specific path lease under docs/agentic-path-leases/<branch>.json
+
+requires_manager_approval:
+  - shared router/index/barrel files
+  - shared API contract files
+  - database schemas or migrations touched by another branch
+  - Terraform files touched by another branch
+  - auth/security/billing files touched by another branch
+  - intentionally merging two branches with overlapping files
+
+agent_behavior_when_blocked:
+  - log conflict to agents.log
+  - do not open PR
+  - do not force push
+  - do not rebase blindly
+  - select another ready task if available
+  - ask manager only for unavoidable overlap
+
+architecture_guidance:
+  - follow single responsibility principle
+  - prefer new component/service/adapter files over editing large shared files
+  - avoid god files and broad controller changes
+  - split tasks by domain and file ownership
+  - make PRs small, reversible, and easy to debug

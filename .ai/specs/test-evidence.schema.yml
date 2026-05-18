@@ -1,0 +1,29 @@
+version: 3
+name: Test Evidence Schema
+required_fields:
+  validation_summary: string
+  commands:
+    type: list
+    item_required_fields:
+      - command
+      - environment
+      - result
+      - evidence
+  tests_added:
+    type: list
+  tests_changed:
+    type: list
+  manual_verification:
+    type: list
+  bugs_found:
+    type: list
+  known_gaps:
+    type: list
+  qa_handoff_required: boolean
+
+result_values:
+  - passed
+  - failed
+  - skipped_with_reason
+  - blocked
+  - not_applicable

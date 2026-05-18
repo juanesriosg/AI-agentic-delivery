@@ -1,0 +1,42 @@
+version: 4
+name: Visual Regression Standard
+
+required_when:
+  - UI layout changes
+  - form changes
+  - design system component changes
+  - responsive behavior changes
+  - PM or QA reports visual issue
+
+minimum_viewports:
+  mobile: 390x844
+  desktop: 1440x900
+optional_viewports:
+  tablet: 768x1024
+  small_mobile: 360x740
+  large_desktop: 1920x1080
+
+required_states_for_forms:
+  - empty
+  - focused
+  - valid_input
+  - invalid_input
+  - submitting
+  - success
+  - error
+  - disabled
+
+pass_criteria:
+  - no_overlapping_text_or_placeholders
+  - no_clipped_required_content
+  - no_horizontal_scroll_unless_expected
+  - focus_state_visible
+  - labels_and_errors_readable
+  - layout_matches_existing_app_patterns
+  - mobile_keyboard_does_not_hide_critical_controls_or_gap_documented
+
+failure_requires:
+  - annotation
+  - feedback_record
+  - owner_agent
+  - verification_after_fix

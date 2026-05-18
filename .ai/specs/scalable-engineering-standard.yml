@@ -1,0 +1,50 @@
+version: 2
+scalable_engineering_standard:
+  goal: Code should be safe and usable for one user while avoiding obvious one-way doors that block future scale.
+  default_position:
+    avoid_premature_overengineering: true
+    avoid_premature_scale_blockers: true
+    prefer_bounded_simple_designs: true
+  required_for_request_paths:
+    - explicit_input_limits
+    - timeouts_for_external_calls
+    - structured_error_handling
+    - observable_latency_and_errors
+    - no_unbounded_memory_growth
+    - no_sync_fanout_without_limits
+  required_for_data_access:
+    - pagination_or_streaming_for_collections
+    - indexes_considered_for_new_queries
+    - no_n_plus_one_queries
+    - bounded_batch_sizes
+    - transaction_boundaries_explained
+  required_for_jobs_and_queues:
+    - idempotency_strategy
+    - retry_strategy
+    - dead_letter_or_failure_path
+    - observability
+    - concurrency_limit
+  required_for_concurrency:
+    - shared_state_strategy
+    - cancellation_or_timeout_strategy
+    - race_risk_assessment
+    - tests_or_reasoning
+  required_for_public_apis:
+    - backwards_compatibility_or_versioning
+    - rate_limit_considered
+    - authz_considered
+    - error_contract_documented
+  scale_review_questions:
+    - What is the bounded resource limit?
+    - What happens when traffic spikes?
+    - What happens when a dependency is slow or unavailable?
+    - What happens when the same request is retried?
+    - What is measured to detect failure before users report it?
+    - What is the rollback or disable path?
+  blockers:
+    - unbounded_query_or_payload_in_user_path
+    - network_call_without_timeout
+    - retry_without_idempotency_or_limit
+    - global_mutable_state_in_concurrent_path
+    - no_observability_for_high_risk_path
+    - public_contract_break_without_approval

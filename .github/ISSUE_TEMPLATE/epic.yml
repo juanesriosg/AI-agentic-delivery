@@ -1,0 +1,88 @@
+name: Agent Epic
+description: Epic that can be broken into autonomous agent tasks.
+title: "[Epic]: "
+labels: ["epic", "ai:epic"]
+body:
+  - type: input
+    id: business_outcome
+    attributes:
+      label: Business outcome
+    validations:
+      required: true
+  - type: input
+    id: stakeholder
+    attributes:
+      label: Primary stakeholder
+    validations:
+      required: true
+  - type: textarea
+    id: spec_sources
+    attributes:
+      label: Spec sources
+      value: |
+        - 
+    validations:
+      required: true
+  - type: textarea
+    id: epic_acs
+    attributes:
+      label: Epic acceptance criteria
+      value: |
+        - EAC-001: 
+    validations:
+      required: true
+  - type: textarea
+    id: features
+    attributes:
+      label: Feature/task breakdown
+      value: |
+        - Feature 1:
+          - Task:
+    validations:
+      required: true
+  - type: textarea
+    id: repos_contracts
+    attributes:
+      label: Repos and cross-repo contracts
+      value: |
+        - Repo:
+        - Contract/API/event/schema:
+    validations:
+      required: true
+  - type: textarea
+    id: qa_strategy
+    attributes:
+      label: QA strategy
+      value: |
+        - Unit:
+        - Component:
+        - Integration:
+        - Contract:
+        - E2E:
+        - Dev:
+        - QA:
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and constraints
+      value: |
+        - 
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout and rollback
+      value: |
+        Rollout:
+        Rollback:
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Human owner/reviewer
+    validations:
+      required: true

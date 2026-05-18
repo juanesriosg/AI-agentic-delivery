@@ -1,0 +1,30 @@
+version: 4
+name: Accessibility Standard
+
+minimum_checks:
+  forms:
+    - every_input_has_label_or_accessible_name
+    - placeholder_is_not_the_only_label
+    - errors_are_programmatically_associated_when_possible
+    - required_fields_are_identified
+    - validation_does_not_depend_only_on_color
+  keyboard:
+    - all_interactive_elements_keyboard_reachable
+    - focus_order_logical
+    - focus_visible
+    - no_keyboard_trap
+  semantics:
+    - native_elements_preferred
+    - headings_order_reasonable
+    - buttons_and_links_have_correct_roles
+    - aria_used_only_when_needed
+  visual:
+    - text_contrast_risk_reviewed
+    - touch_targets_reasonable
+    - responsive_layout_preserves_access
+
+blocking_examples:
+  - form_cannot_be_completed_by_keyboard
+  - no_label_for_required_input
+  - error_message_not_available_to_assistive_technology_where_app_supports_it
+  - focus_not_visible_on_primary_controls

@@ -1,0 +1,45 @@
+name: Agent feedback
+description: Capture a correction that should teach future agents
+labels: ["ai:feedback", "ai:self-improvement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the agent behavior, output, PR, test gap, or review issue.
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why does this matter?
+      description: Explain the business, engineering, quality, trust, or safety impact.
+    validations:
+      required: true
+  - type: textarea
+    id: future_behavior
+    attributes:
+      label: What should future agents do differently?
+    validations:
+      required: true
+  - type: input
+    id: target_skill
+    attributes:
+      label: Target skill or agent, if known
+      placeholder: .ai/skills/pr-authoring.skill.md
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - low
+        - medium
+        - high
+        - critical
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence links
+      description: PR link, issue link, logs, screenshot, or evidence path.

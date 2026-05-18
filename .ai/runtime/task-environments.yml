@@ -1,0 +1,66 @@
+version: 2
+environments:
+  python:
+    detect_any:
+      - pyproject.toml
+      - requirements.txt
+      - setup.py
+      - poetry.lock
+      - Pipfile
+    create: python3 -m venv .agent/envs/${AGENT_TASK_ID}/python
+    activate: . .agent/envs/${AGENT_TASK_ID}/python/bin/activate
+    install_order:
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      - pip install -e ".[dev]"
+      - pip install -e .
+    notes:
+      - Use the first install command compatible with the repo.
+      - Do not commit virtual environment files.
+  node:
+    detect_any:
+      - package.json
+    install_order:
+      - pnpm install --frozen-lockfile
+      - npm ci
+      - yarn install --frozen-lockfile
+    notes:
+      - Pick the command matching the lockfile.
+      - Do not update lockfiles unless dependency changes are in scope.
+  go:
+    detect_any:
+      - go.mod
+    install_order:
+      - go mod download
+  rust:
+    detect_any:
+      - Cargo.toml
+    install_order:
+      - cargo fetch
+  java_maven:
+    detect_any:
+      - pom.xml
+      - mvnw
+    install_order:
+      - ./mvnw -q -DskipTests dependency:go-offline
+      - mvn -q -DskipTests dependency:go-offline
+  java_gradle:
+    detect_any:
+      - build.gradle
+      - build.gradle.kts
+      - gradlew
+    install_order:
+      - ./gradlew --no-daemon dependencies
+      - gradle dependencies
+  dotnet:
+    detect_any:
+      - '*.sln'
+      - '*.csproj'
+    install_order:
+      - dotnet restore
+  ruby:
+    detect_any:
+      - Gemfile
+    install_order:
+      - bundle config set path .agent/vendor/bundle
+      - bundle install

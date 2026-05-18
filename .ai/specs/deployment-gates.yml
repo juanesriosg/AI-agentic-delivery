@@ -1,0 +1,48 @@
+version: 1
+name: deployment-gates
+purpose: Prevent autonomous agents from deploying unsafe or unreviewed changes.
+
+default_policy:
+  production_deploys_by_agents: false
+  production_config_changes_by_agents: false
+  qa_deploys_require_manager_approval: true
+  dev_deploys_require_repo_opt_in: true
+
+required_before_any_deploy:
+  - source_spec_path_recorded
+  - acceptance_criteria_mapped_to_tests
+  - quality_gate_passed
+  - rollback_plan_recorded
+  - no_unapproved_destructive_operations
+  - no_secrets_or_production_data_committed
+  - risk_level_recorded
+
+dev_deployment:
+  allowed_only_when:
+    - environment_variable_ALLOW_AGENT_DEV_DEPLOY_true
+    - repo_script_exists_.ai_deploy_dev_deploy_sh
+    - target_environment_is_non_production
+    - deployment_is_reversible
+  evidence_required:
+    - command_run
+    - commit_sha
+    - environment
+    - result
+    - logs_summary
+    - rollback_command_or_plan
+
+qa_deployment:
+  allowed_only_when:
+    - manager_or_repo_owner_approval_recorded
+    - qa_environment_is_non_production
+    - qa_checklist_exists
+    - acceptance_criteria_evidence_exists
+
+production_deployment:
+  allowed: false
+  required_human_owner_action:
+    - approve_release
+    - verify_change_window
+    - verify_incident_contact
+    - verify_rollback
+    - execute_or_authorize_production_deploy

@@ -1,0 +1,35 @@
+id: EPIC-45
+title: "Customer report export"
+business_outcome: "Allow operations users to export customer activity reports without engineering support."
+stakeholder: "Operations team"
+owner: "manager-name"
+repos:
+  - "frontend-app"
+  - "reporting-api"
+success_metrics:
+  - "Operations can export CSV for selected date range."
+  - "No manual SQL requests needed for standard report."
+  - "Export completes under accepted time for normal date ranges."
+features:
+  - id: FEATURE-45A
+    title: "Backend CSV export endpoint"
+    repo: "reporting-api"
+    risk_level: medium
+    tasks:
+      - "TASK-451"
+      - "TASK-452"
+  - id: FEATURE-45B
+    title: "Frontend export button"
+    repo: "frontend-app"
+    risk_level: low
+    tasks:
+      - "TASK-453"
+acceptance_criteria:
+  - "CSV includes required columns."
+  - "Date range filters work."
+  - "Errors are visible to user."
+  - "Relevant tests pass."
+risks:
+  - "Large exports may affect API performance."
+rollout_plan: "Release behind feature flag if available."
+rollback_plan: "Disable feature flag or revert endpoint/UI PRs."

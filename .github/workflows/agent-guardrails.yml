@@ -1,0 +1,26 @@
+name: Agent Guardrails
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 100
+
+      - name: Run agent guardrail checks
+        shell: bash
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          chmod +x .ai/scripts/check-agent-guardrails.sh
+          .ai/scripts/check-agent-guardrails.sh

@@ -1,0 +1,78 @@
+# Agentic Spec Template Schema
+# This is a lightweight schema for humans and automation.
+# It is intentionally simple so it can validate Markdown frontmatter or YAML specs.
+
+version: 1
+required_top_level_sections:
+  markdown:
+    - "0. Spec control"
+    - "1. Description"
+    - "2. Business need"
+    - "3. User needs and scenarios"
+    - "4. Requirements"
+    - "5. Scope"
+    - "6. Files and areas to touch"
+    - "10. Testing expectations"
+    - "11. Acceptance criteria"
+    - "15. Definition of done"
+  yaml:
+    - spec
+    - summary
+    - requirements
+    - scope
+    - files
+    - acceptance_criteria
+    - testing
+    - definition_of_done
+
+required_markdown_signals:
+  - "Functional requirements"
+  - "Non-functional requirements"
+  - "Expected files / directories to touch"
+  - "Files / directories that must not be touched without approval"
+  - "Acceptance criterion"
+  - "Unit tests"
+  - "QA Agent"
+  - "PM Agent"
+
+quality_rules:
+  one_responsibility:
+    description: "Spec should include a PR decomposition plan when more than one domain is touched."
+    required_when_any:
+      - frontend_and_backend
+      - backend_and_database
+      - cloud_or_terraform
+      - security_sensitive_change
+  files_to_touch:
+    description: "Spec must include expected files and protected files."
+    require_expected_files: true
+    require_do_not_touch: true
+  tests:
+    description: "Spec must include a test matrix or testing expectations."
+    require_unit_tests_decision: true
+    require_integration_tests_decision: true
+    require_e2e_tests_decision: true
+    require_visual_qa_decision_for_ui: true
+  cloud:
+    description: "AWS or infrastructure changes require Terraform and GitHub workflow path."
+    terraform_required_for_new_aws_components: true
+  acceptance:
+    description: "Story completion requires QA Agent and PM Agent approval."
+    qa_required: true
+    pm_required: true
+    dev_manager_pr_gate_required: true
+
+risk_triggers:
+  high_risk_without_approval:
+    - auth
+    - authorization
+    - billing
+    - payments
+    - production config
+    - migrations
+    - data deletion
+    - secrets
+    - infrastructure
+    - terraform apply
+    - public API breaking change
+    - cross-repo contract change

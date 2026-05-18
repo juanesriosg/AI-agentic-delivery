@@ -1,0 +1,11 @@
+schema: agentic.integration_e2e_test_policy.v1
+rules:
+  db:
+    required: schema/model/repository and DB integration tests
+  api:
+    required: unit, contract, and DB-backed integration tests
+  frontend:
+    required: component, visual/accessibility, and real API/E2E tests for user flows
+  local_app_unavailable:
+    allowed: record blocker and run all cloud-safe checks
+    not_allowed: claim integrated pass

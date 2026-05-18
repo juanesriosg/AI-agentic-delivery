@@ -1,0 +1,129 @@
+version: 10.0
+policy_name: data_analysis_read_only_policy
+
+purpose: >-
+  Allow AI agents to answer business questions using project context and database data
+  while preventing data mutation, credential exposure, and unsafe access to sensitive data.
+
+allowed_sql:
+  - SELECT
+  - WITH_SELECT
+  - EXPLAIN_SELECT
+
+blocked_sql_keywords:
+  - DELETE
+  - UPDATE
+  - INSERT
+  - UPSERT
+  - MERGE
+  - TRUNCATE
+  - DROP
+  - ALTER
+  - CREATE
+  - REPLACE
+  - GRANT
+  - REVOKE
+  - VACUUM
+  - ANALYZE
+  - CALL
+  - EXEC
+  - EXECUTE
+  - COPY
+  - LOAD
+  - LOCK
+  - BEGIN
+  - COMMIT
+  - ROLLBACK
+  - SAVEPOINT
+  - SET ROLE
+  - SET SESSION AUTHORIZATION
+  - INTO OUTFILE
+  - INTO DUMPFILE
+  - ATTACH
+  - DETACH
+  - PRAGMA
+
+execution:
+  require_guardrail_script: true
+  guardrail_script: .ai/scripts/safe_sql_query.py
+  require_readonly_credentials: true
+  required_env_var: AGENTIC_DB_DSN_READONLY
+  default_limit: 500
+  max_limit: 5000
+  statement_timeout_seconds: 30
+  allow_multiple_statements: false
+  allow_unbounded_queries: false
+  log_queries: true
+  log_results_by_default: false
+
+privacy:
+  prefer_aggregates: true
+  redact_sensitive_columns: true
+  default_redacted_column_patterns:
+    - password
+    - passwd
+    - secret
+    - token
+    - api_key
+    - access_key
+    - private_key
+    - credit
+    - card
+    - cvv
+    - ssn
+    - national_id
+    - document
+    - phone
+    - email
+    - address
+  raw_pii_requires_manager_approval: true
+
+allowed_outputs:
+  - markdown_answer
+  - aggregate_table
+  - chart_ready_json
+  - query_evidence
+  - data_quality_notes
+  - follow_up_questions
+
+forbidden_outputs:
+  - raw_credentials
+  - secrets
+  - private_keys
+  - unrestricted_user_exports
+  - bulk_pii_exports
+
+context_sources:
+  specs:
+    - specs/**
+    - docs/specs/**
+    - .ai/inbox/specs/**
+    - .codex/specs/**
+  business_rules:
+    - docs/business-rules/**
+    - .ai/specs/business-rules*.md
+  pr_summaries:
+    - docs/agentic-evidence/**/pr-notification.md
+    - docs/agentic-evidence/**/agents.log.md
+  qa_pm_evidence:
+    - docs/agentic-evidence/**/qa-checklist.md
+    - docs/agentic-evidence/**/pm-checklist.md
+
+approval_required_for:
+  - querying production databases
+  - raw PII access
+  - exporting more than max_limit rows
+  - changing database permissions
+  - adding new database connections
+  - querying tables outside allowed schema allowlist
+  - any query that the guardrail script blocks
+
+recommended_database_controls:
+  - read_only_database_user
+  - read_replica_or_warehouse
+  - least_privilege_schema_access
+  - statement_timeout
+  - row_limit
+  - query_audit_log
+  - no_write_grants
+  - network_access_restrictions

@@ -1,0 +1,47 @@
+name: Agentic Request @codex Review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  issues: write
+  pull-requests: read
+  contents: read
+
+concurrency:
+  group: agentic-request-codex-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+jobs:
+  request_codex_review:
+    name: request_codex_review
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request official Codex GitHub review with @codex
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const {owner, repo} = context.repo;
+            const pr = context.payload.pull_request;
+            const issue_number = pr.number;
+            const sha = pr.head.sha;
+            const marker = `<!-- agentic-codex-review-request:${sha} -->`;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
+            if (comments.some(c => c.body && c.body.includes(marker))) {
+              core.info('Codex review request already exists for this head SHA.');
+              return;
+            }
+            const body = [
+              marker,
+              '@codex review',
+              '',
+              'Please review this PR before human AI PM approval.',
+              '',
+              'Focus on: one-responsibility scope, spec alignment, tests, screenshots/visual evidence, security, reliability, scale, AWS/Terraform compliance, rollback, and whether the PR is understandable for a senior developer/product manager review.',
+              '',
+              'This request is automatic. The separate **Agentic Codex PR Review / codex_review_gate** status check remains the required merge gate.'
+            ].join(String.fromCharCode(10));
+            await github.rest.issues.createComment({owner, repo, issue_number, body});

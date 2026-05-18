@@ -1,0 +1,24 @@
+version: 4
+name: Frontend Quality Standard
+
+required_considerations:
+  - component_boundaries
+  - design_system_reuse
+  - state_management_simplicity
+  - loading_error_success_empty_states
+  - form_validation
+  - accessibility
+  - responsive_behavior
+  - visual_regression_evidence
+  - stable_test_selectors
+  - API_contract_alignment
+  - performance_and_bundle_impact
+
+anti_patterns:
+  - placeholder_as_only_label
+  - hardcoded_magic_spacing_when_tokens_exist
+  - broad_css_that_affects_unrelated_components
+  - swallowing_api_errors
+  - optimistic_ui_without_recovery
+  - making_e2e_tests_depend_on_unstable_text_when_data_testids_exist
+  - duplicate_component_logic_instead_of_reuse

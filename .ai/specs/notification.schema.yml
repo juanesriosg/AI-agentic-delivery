@@ -1,0 +1,55 @@
+version: 1
+
+events:
+  task_claimed:
+    required:
+      - status
+      - task
+      - repo
+      - branch
+      - agent
+      - expected_validation
+
+  task_blocked:
+    required:
+      - status
+      - task
+      - repo
+      - blocker
+      - impact
+      - options
+      - manager_decision_needed
+
+  pr_ready:
+    required:
+      - status
+      - task
+      - repo
+      - branch
+      - pr
+      - validation
+      - risk
+      - rollback
+      - manager_action_needed
+      - next_agent_action
+
+  feature_agent_complete:
+    required:
+      - status
+      - feature
+      - related_tasks
+      - related_prs
+      - validation
+      - known_risks
+      - manager_action_needed
+
+  epic_agent_complete:
+    required:
+      - status
+      - epic
+      - completed_features
+      - related_prs
+      - integration_validation
+      - remaining_risks
+      - stakeholder_acceptance_needed
+      - manager_action_needed

@@ -1,0 +1,33 @@
+version: 2
+destructive_operations:
+  forbidden_without_explicit_approval:
+    git:
+      - git reset --hard
+      - git clean -fdx
+      - git push --force
+      - git filter-branch
+      - git rebase default branch after public push without approval
+    shell:
+      - rm -rf
+      - find . -delete
+      - chmod -R 777
+      - chown -R
+    database:
+      - DROP TABLE
+      - DROP DATABASE
+      - TRUNCATE TABLE
+      - ALTER TABLE DROP COLUMN
+      - destructive migration
+    cloud:
+      - terraform destroy
+      - kubectl delete
+      - helm uninstall
+      - aws s3 rm --recursive
+      - aws cloudformation delete-stack
+  required_before_approval:
+    - exact command
+    - target resource/path
+    - reason
+    - backup_or_rollback_plan
+    - owner approval
+    - dry_run_output_when_supported

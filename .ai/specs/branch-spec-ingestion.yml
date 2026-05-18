@@ -1,0 +1,101 @@
+version: 1
+name: branch-spec-ingestion
+purpose: Detect specs pushed to development branches and convert them into autonomous agent work.
+
+enabled: true
+
+watched_branches:
+  - develop
+  - dev/**
+  - spec/**
+  - chatgpt/**
+  - ai-spec/**
+  - feature/spec/**
+
+watched_paths:
+  - specs/*.md
+  - specs/**/*.md
+  - specs/*.markdown
+  - specs/**/*.markdown
+  - specs/*.yml
+  - specs/**/*.yml
+  - specs/*.yaml
+  - specs/**/*.yaml
+  - specs/*.json
+  - specs/**/*.json
+  - .ai/inbox/specs/*.md
+  - .ai/inbox/specs/**/*.md
+  - .ai/inbox/specs/*.yml
+  - .ai/inbox/specs/**/*.yml
+  - .ai/inbox/specs/*.yaml
+  - .ai/inbox/specs/**/*.yaml
+  - .codex/specs/*.md
+  - .codex/specs/**/*.md
+  - docs/specs/*.md
+  - docs/specs/**/*.md
+  - requirements/specs/*.md
+  - requirements/specs/**/*.md
+
+ignored_paths:
+  - .agent/**
+  - node_modules/**
+  - .venv/**
+  - .git/**
+  - dist/**
+  - build/**
+  - target/**
+
+source_branch_policy:
+  implementation_branch_base: source_spec_branch
+  pr_target: source_spec_branch
+  direct_commits_to_source_spec_branch: forbidden
+
+implementation_branch_template: ai/{spec_id}-{slug}
+
+minimum_spec_readiness:
+  required:
+    - business_goal
+    - technical_goal
+    - acceptance_criteria
+    - constraints_or_non_goals
+    - validation_expectations
+  minimum_quality_score: 70
+  allow_safe_progress_below_score: true
+  block_risky_implementation_below_score: true
+
+clarification_policy:
+  ask_when_affects:
+    - behavior
+    - user_visible_output
+    - public_contract
+    - data_model
+    - security
+    - authorization
+    - billing
+    - migration
+    - infrastructure
+    - deployment
+    - ownership
+    - test_or_qa_acceptance
+  continue_safe_progress: true
+
+agent_dispatch:
+  create_github_issue: true
+  github_issue_labels:
+    - ai:ready
+    - ai:from-spec
+  repository_dispatch_event_type: ai_spec_ready
+  webhook_secret_name: AGENT_DISPATCH_WEBHOOK_URL
+  webhook_optional: true
+
+deployment_policy:
+  dev_environment:
+    allowed_when:
+      - repo_has_safe_deploy_script
+      - ALLOW_AGENT_DEV_DEPLOY_is_true
+      - tests_passed
+      - rollback_plan_exists
+  qa_environment:
+    requires_manager_or_repo_owner_approval: true
+  production:
+    automatic_agent_deploy_allowed: false

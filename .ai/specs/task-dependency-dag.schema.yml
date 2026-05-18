@@ -1,0 +1,8 @@
+schema: agentic.task_dependency_dag.v1
+task:
+  task_id: string
+  domain: frontend|backend|database|cloud|security|design|qa|pm|release|fullstack
+  layer: design|cloud|database|api|frontend|qa|pm|release|crosscutting
+  depends_on: list[string]
+  expected_paths: list[string]
+  gate_required: boolean

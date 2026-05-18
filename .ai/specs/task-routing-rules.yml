@@ -1,0 +1,32 @@
+version: 2
+task_routing:
+  default_agent: mid-software-engineer
+  add_agents_when:
+    cloud_runtime_or_setup:
+      labels: [runtime, setup, codex, cloud, ci]
+      agents: [cloud-runtime-engineer]
+    refactor_or_clean_code:
+      labels: [refactor, clean-code, maintainability]
+      agents: [clean-code-refactoring]
+    scale_or_performance:
+      labels: [scale, performance, load, latency, throughput]
+      agents: [scalability-architect, performance-engineer]
+    security:
+      labels: [security, auth, permissions, secrets, pii]
+      agents: [security-engineer]
+    architecture:
+      labels: [architecture, adr, public-api, data-contract, cross-repo]
+      agents: [architecture-reviewer]
+  automatic_review_requirements:
+    high_risk_paths:
+      - auth/**
+      - security/**
+      - infra/**
+      - migrations/**
+      - .github/workflows/**
+    require_agents:
+      - security-engineer
+      - architecture-reviewer
+  continuation:
+    after_pr_ready: select_next_ai_ready_task_if_wip_allows
+    if_cloud_session_ends: record_suggested_next_task_for_next_run

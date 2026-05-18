@@ -1,0 +1,86 @@
+schema: agentic.poc_to_pr_policy.v1
+version: 13
+
+purpose: >
+  Convert a stakeholder POC into an implementation-ready spec branch, let Codex
+  agents implement on that same branch, and create a final manager PR.
+
+workflow:
+  input: stakeholder_poc
+  spec_author: gpt_pro_or_ai_pm
+  spec_branch: dev/<feature>
+  spec_file: specs/<feature>.spec.md
+  implementation_branch_strategy: source_spec_branch_integration
+  final_pr: spec_branch_to_main
+  manager_review: required
+
+branching:
+  source_spec_branch_is_integration_branch: true
+  push_task_commits_to_spec_branch: true
+  create_task_prs: false
+  create_final_pr_from_spec_branch: true
+  final_pr_base_branch: main
+
+readiness:
+  required_status: ready_for_agents
+  draft_statuses_blocked:
+    - draft
+    - needs_clarification
+    - blocked
+    - on_hold
+  implementation_blockers:
+    - missing_design
+    - missing_data_model_decision
+    - missing_api_contract_decision
+    - missing_cloud_decision
+    - unresolved_placeholders
+    - high_risk_unknowns
+
+agent_cycle:
+  - product_requirements
+  - architecture_design
+  - paradigm_selection
+  - task_split
+  - cloud_or_terraform_if_needed
+  - database_if_needed
+  - api_backend_if_needed
+  - frontend_if_needed
+  - qa
+  - pm_acceptance
+  - dev_manager_pr_governance
+  - codex_ai_pr_review
+  - human_ai_pm_review
+
+layer_order:
+  required: true
+  order:
+    - design
+    - database
+    - api
+    - frontend
+  rules:
+    database_before_api: true
+    api_before_frontend: true
+    unit_tests_are_not_completion: true
+    integration_tests_required_when_dependencies_exist: true
+
+aws:
+  new_components_must_use_terraform: true
+  raw_mutating_aws_cli_blocked: true
+  well_architected_review_required: true
+  pillars:
+    - operational_excellence
+    - security
+    - reliability
+    - performance_efficiency
+    - cost_optimization
+    - sustainability
+
+final_pr:
+  tag_manager: true
+  require_codex_review: true
+  require_qa_evidence: true
+  require_pm_evidence: true
+  require_test_evidence: true
+  require_layer_gates: true
+  require_rollback_notes: true

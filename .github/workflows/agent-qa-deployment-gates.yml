@@ -1,0 +1,48 @@
+name: Agent QA and Deployment Gates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - develop
+      - 'dev/**'
+      - 'release/**'
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  qa-and-deployment-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run agent quality gate
+        run: |
+          if [ -x .ai/scripts/run-agent-quality-gate.sh ]; then
+            .ai/scripts/run-agent-quality-gate.sh
+          else
+            echo "No agent quality gate script found."
+          fi
+
+      - name: Validate deployment gates file
+        run: |
+          test -f .ai/specs/deployment-gates.yml
+          grep -q "production_deploys_by_agents: false" .ai/specs/deployment-gates.yml
+
+      - name: Optional non-production deployment smoke
+        env:
+          ALLOW_AGENT_DEV_DEPLOY: ${{ vars.ALLOW_AGENT_DEV_DEPLOY || 'false' }}
+        run: |
+          if [ "$ALLOW_AGENT_DEV_DEPLOY" != "true" ]; then
+            echo "Dev deployment skipped: ALLOW_AGENT_DEV_DEPLOY is not true."
+            exit 0
+          fi
+          if [ ! -x .ai/deploy/dev-deploy.sh ]; then
+            echo "Dev deployment skipped: .ai/deploy/dev-deploy.sh not present or not executable."
+            exit 0
+          fi
+          echo "Running opted-in non-production deployment script."
+          .ai/deploy/dev-deploy.sh

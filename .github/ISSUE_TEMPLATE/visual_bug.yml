@@ -1,0 +1,24 @@
+name: Visual QA Bug
+about: Visual defect with screenshots/annotations
+labels: [ai:feedback, visual-qa]
+body:
+  - type: input
+    id: story_id
+    attributes:
+      label: Story ID
+  - type: input
+    id: screenshot
+    attributes:
+      label: Screenshot path or artifact link
+  - type: textarea
+    id: issue
+    attributes:
+      label: Visual issue
+      placeholder: Expected vs actual, viewport, selector, owner agent.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options: [low, medium, high, critical]

@@ -1,0 +1,52 @@
+version: 2
+scorecard:
+  max_score: 100
+  categories:
+    correctness:
+      points: 20
+      evidence:
+        - acceptance_criteria_met
+        - tests_pass
+        - edge_cases_handled
+    maintainability:
+      points: 15
+      evidence:
+        - readable_names
+        - cohesive_units
+        - low_unnecessary_coupling
+    architecture:
+      points: 15
+      evidence:
+        - boundaries_respected
+        - reversible_decisions
+        - adr_when_needed
+    testing:
+      points: 15
+      evidence:
+        - targeted_tests
+        - regression_tests
+        - validation_commands
+    reliability_and_scale:
+      points: 15
+      evidence:
+        - bounded_resources
+        - timeout_retry_idempotency_when_applicable
+        - observability
+    security:
+      points: 10
+      evidence:
+        - no_secrets
+        - authz_preserved
+        - input_validation
+    operability:
+      points: 10
+      evidence:
+        - rollback_plan
+        - logs_metrics_or_traces_when_applicable
+        - clear_pr_summary
+  minimums:
+    low_risk_task: 75
+    medium_risk_task: 82
+    high_risk_task: 90
+    production_sensitive_task: 92
+  below_minimum_action: fix_or_escalate

@@ -1,0 +1,15 @@
+{
+  "schema": "agentic.feedback_event.v1",
+  "event_id": "fb-20260517-001",
+  "created_at": "2026-05-17T00:00:00Z",
+  "source": "manager_review",
+  "signal_type": "accepted_correction",
+  "target_agent": "pr-documentation-agent",
+  "target_skill": ".ai/skills/pr-authoring.skill.md",
+  "severity": "medium",
+  "summary": "PR summary was too long and hid validation evidence.",
+  "rationale": "Manager needs concise review summary with links to evidence, not a long narrative.",
+  "accepted": true,
+  "evidence": ["PR #42 review comment", "docs/agentic-evidence/spec-x/task-y/pr-notification.md"],
+  "suggested_improvement": "Add a 5-bullet PR summary limit and require evidence links."
+}

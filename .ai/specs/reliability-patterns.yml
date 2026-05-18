@@ -1,0 +1,29 @@
+version: 2
+reliability_patterns:
+  defaults:
+    - fail_fast_when_inputs_invalid
+    - degrade_gracefully_when_possible
+    - make_operations_idempotent_when_retries_possible
+    - use_timeouts_for_io
+    - use_retries_with_exponential_backoff_and_jitter
+    - surface_actionable_errors
+    - record_correlation_ids_when_available
+  patterns:
+    timeout:
+      use_when: external call, database call, queue receive, lock acquisition, long-running operation
+      require: explicit value, error handling, test or rationale
+    retry:
+      use_when: transient failure is likely and operation is safe
+      require: max attempts, backoff, jitter, idempotency, observability
+    circuit_breaker:
+      use_when: dependency failures can cascade
+      require: fallback or clear failure, metrics, recovery behavior
+    bulkhead:
+      use_when: one workload path can exhaust shared resources
+      require: isolated pool/limit, monitoring
+    idempotency_key:
+      use_when: create/update/payment/job command can be retried
+      require: duplicate handling and storage strategy
+    dead_letter_queue:
+      use_when: queue messages can fail permanently
+      require: inspection, replay, alerting policy

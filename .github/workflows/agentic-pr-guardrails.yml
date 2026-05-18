@@ -1,0 +1,60 @@
+name: Agentic PR guardrails
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Detect task id from branch
+        id: task
+        shell: bash
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          TASK_ID="$(basename "$BRANCH")"
+          echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+
+
+      - name: Run branch conflict guard
+        env:
+          AGENTIC_DEFAULT_BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          python .ai/scripts/branch_conflict_guard.py guard \
+            --mode pr \
+            --base "${{ github.event.repository.default_branch }}" \
+            --current-diff-base "${{ github.base_ref }}" \
+            --exclude-branch "${{ github.head_ref }}" \
+            --exclude-branch "${{ github.base_ref }}" \
+            --json-output branch-conflict-report.json \
+            --markdown-output branch-conflict-report.md
+
+      - name: Run PR guardrails
+        env:
+          AGENT_ALLOW_MULTI_DOMAIN_PR: 'false'
+          AGENT_BLOCK_PLACEHOLDER_EVIDENCE: 'true'
+        run: |
+          python .ai/scripts/pr_guardrails.py \
+            --base "${{ github.base_ref }}" \
+            --task-id "${{ steps.task.outputs.task_id }}"
+
+      - name: Run AWS/Terraform guardrails
+        run: |
+          python .ai/scripts/aws_terraform_guardrails.py \
+            --base "${{ github.base_ref }}" \
+            --task-id "${{ steps.task.outputs.task_id }}"

@@ -1,0 +1,94 @@
+name: Agentic SDLC - Auto-start from new spec (legacy/manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_specs:
+        description: Maximum new specs to process
+        default: '1'
+        required: false
+      mode:
+        description: local by default. Use cloud only with explicit opt-in.
+        default: local
+        required: false
+      allow_cloud:
+        description: Explicitly allow cloud mode for this manual run. Must be true when mode=cloud.
+        default: 'false'
+        required: false
+
+# v13 note: automatic POC/spec-branch implementation is handled by
+# .github/workflows/agentic-poc-spec-to-pr.yml. This workflow is manual only
+# to avoid duplicate Codex runs, duplicate commits, and duplicate PRs.
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: agentic-spec-autostart-manual-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  start-agents:
+    runs-on: ubuntu-latest
+    env:
+      CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      AGENT_MAX_FILES_CHANGED: '35'
+      AGENT_MAX_LINES_CHANGED: '1200'
+      AGENTIC_CODEX_MODEL: 'gpt-5.5'
+      AGENTIC_CODEX_REASONING_EFFORT: 'xhigh'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Configure Git author
+        run: |
+          git config --global user.name "ai-agentic-sdlc"
+          git config --global user.email "ai-agentic-sdlc@users.noreply.github.com"
+
+      - name: Doctor
+        run: python .ai/scripts/agentic_sdlc.py doctor || true
+
+      - name: Run agentic SDLC once
+        run: |
+          MAX_SPECS="${{ github.event.inputs.max_specs || '1' }}"
+          MODE="${{ github.event.inputs.mode || 'local' }}"
+          ALLOW_CLOUD="${{ github.event.inputs.allow_cloud || 'false' }}"
+          EXTRA=()
+          if [ "$MODE" = "cloud" ]; then
+            if [ "$ALLOW_CLOUD" != "true" ]; then
+              echo "Cloud mode is blocked by local-first policy. Set allow_cloud=true only when explicitly intended." >&2
+              exit 2
+            fi
+            export AGENTIC_EXPLICIT_CLOUD=true
+            EXTRA+=(--allow-cloud)
+          fi
+          python .ai/scripts/agentic_sdlc.py "${EXTRA[@]}" run-once --mode "$MODE" --max-specs "$MAX_SPECS"
+
+      - name: Upload agent reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-sdlc-reports
+          path: |
+            .agent/runs/**
+            .agent/state/**
+            docs/agentic-evidence/**
+          if-no-files-found: ignore

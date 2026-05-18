@@ -1,0 +1,51 @@
+name: Agentic Terraform apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub environment to deploy to
+        type: choice
+        required: true
+        options:
+          - dev
+          - qa
+          - staging
+          - production
+      terraform_dir:
+        description: Terraform directory
+        default: infra/terraform
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    env:
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+      AWS_TERRAFORM_APPLY_ROLE_ARN: ${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terraform apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${{ github.event.inputs.terraform_dir }}"
+          terraform init
+          terraform validate
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan

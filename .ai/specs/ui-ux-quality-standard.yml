@@ -1,0 +1,35 @@
+version: 4
+name: UI and UX Quality Standard
+
+principles:
+  - The user should understand what to do without guessing.
+  - Forms should explain required fields, errors, and success outcomes.
+  - Visual hierarchy should guide attention to the next useful action.
+  - UI should be consistent with the existing application unless an approved design change exists.
+  - Accessibility and usability are product quality, not optional polish.
+
+review_dimensions:
+  intuitiveness:
+    checks:
+      - primary_action_clear
+      - next_step_obvious
+      - no_unexplained_required_fields
+      - empty_error_success_states_clear
+  visual_design:
+    checks:
+      - spacing_consistent
+      - alignment_consistent
+      - typography_consistent
+      - no_overlap_or_clipping
+      - responsive_layout_safe
+  content:
+    checks:
+      - button_copy_action_oriented
+      - labels_specific
+      - error_messages_helpful
+      - placeholder_not_replacing_label_for_required_meaning
+  integration:
+    checks:
+      - route_or_navigation_fits_app
+      - design_system_patterns_reused
+      - behavior_consistent_with_adjacent_features

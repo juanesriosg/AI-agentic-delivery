@@ -1,0 +1,50 @@
+name: Agent PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-template-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR body has required sections
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const required = [
+              "## Summary",
+              "## Business goal",
+              "## Runtime",
+              "## Validation",
+              "## Agent self-review",
+              "## Scale/readiness review",
+              "## Architecture impact",
+              "## Security impact",
+              "## Deletions and data safety",
+              "## Risk",
+              "## Rollback",
+              "## Files worth reviewing carefully"
+            ];
+            const missing = required.filter(section => !body.includes(section));
+            if (missing.length) {
+              core.setFailed(`PR body is missing sections: ${missing.join(", ")}`);
+            }
+
+  agent-guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 100
+      - name: Run agent guardrails
+        run: .ai/scripts/check-agent-guardrails.sh
+      - name: Run self-review heuristic
+        run: .ai/scripts/agent-self-review.py --format markdown --strict
+      - name: Run scale-readiness heuristic
+        run: .ai/scripts/check-scale-readiness.py --format markdown

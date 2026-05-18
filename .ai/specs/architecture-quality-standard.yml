@@ -1,0 +1,41 @@
+version: 2
+architecture_quality_standard:
+  design_for:
+    - business_outcome
+    - maintainability
+    - evolvability
+    - testability
+    - observability
+    - reliability
+    - security
+    - performance
+    - cost_awareness
+    - sustainability
+  boundaries:
+    required:
+      - domain_logic_not_coupled_to_framework_when_practical
+      - external_dependencies_hidden_behind_edges_or_adapters
+      - public_contracts_versioned_or_backwards_compatible
+      - persistence_concerns_isolated_when_complex
+      - configuration_not_hardcoded
+  decision_reversibility:
+    two_way_door:
+      review: lightweight
+      examples:
+        - internal_names
+        - small_refactors
+        - isolated_implementation_details
+    one_way_door:
+      review: manager_or_architecture_approval
+      adr_required: true
+      examples:
+        - public_api_contract
+        - database_schema_direction
+        - infrastructure_topology
+        - provider_or_framework_lock_in
+        - security_boundary_change
+  required_pr_sections:
+    - Architecture impact
+    - Reversibility
+    - Tradeoffs
+    - ADR link when required

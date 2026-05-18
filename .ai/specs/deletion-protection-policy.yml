@@ -1,0 +1,42 @@
+version: 2
+deletion_protection:
+  default: deletion_requires_explanation
+  allowed_without_approval:
+    - generated_files_created_by_same_task
+    - obsolete_tests_replaced_by_equivalent_or_better_tests
+    - temporary_files
+    - duplicate_docs_when_replaced_by_canonical_doc
+  approval_required:
+    paths:
+      - .github/**
+      - .ai/**
+      - infra/**
+      - infrastructure/**
+      - terraform/**
+      - cloudformation/**
+      - cdk/**
+      - k8s/**
+      - kubernetes/**
+      - helm/**
+      - migrations/**
+      - database/**
+      - db/migrations/**
+      - secrets/**
+      - certs/**
+      - config/production/**
+      - '**/.env*'
+      - Dockerfile
+      - docker-compose*.yml
+      - LICENSE*
+      - NOTICE*
+      - CODEOWNERS
+    file_types:
+      - private_key
+      - certificate
+      - production_config
+      - migration
+      - security_policy
+  thresholds:
+    max_deleted_files_without_manager_review: 5
+    max_deleted_lines_without_manager_review: 150
+  required_pr_section: Deletions and data safety

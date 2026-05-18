@@ -1,0 +1,36 @@
+name: Agent Test Plan
+description: Test plan for a task, feature, or epic.
+title: "[Test Plan]: "
+labels: ["ai:test-plan", "qa"]
+body:
+  - type: input
+    id: related
+    attributes:
+      label: Related task/feature/epic
+    validations:
+      required: true
+  - type: textarea
+    id: acs
+    attributes:
+      label: Acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: matrix
+    attributes:
+      label: Test traceability matrix
+      description: Map each AC to unit, component, integration, contract, E2E, dev, and QA validation.
+    validations:
+      required: true
+  - type: textarea
+    id: qa
+    attributes:
+      label: QA handoff / manual tests
+    validations:
+      required: false
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and known gaps
+    validations:
+      required: true

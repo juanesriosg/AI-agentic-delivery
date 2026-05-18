@@ -1,0 +1,47 @@
+version: 3
+name: Test Strategy Matrix
+purpose: Help agents choose appropriate tests by change type and risk.
+
+change_types:
+  algorithm_or_business_rule:
+    required: [unit]
+    recommended: [component, property_or_edge_case_tests]
+  api_endpoint:
+    required: [unit, integration]
+    recommended: [contract, e2e_for_critical_flow]
+  ui_component:
+    required: [component]
+    recommended: [unit, e2e_for_critical_flow, accessibility_check]
+  database_query_or_repository:
+    required: [unit_or_component, integration]
+    recommended: [performance_check_for_large_data]
+  migration:
+    required: [migration_test, rollback_or_forward_fix_plan]
+    recommended: [backup_restore_validation]
+    approval_required: true
+  background_job:
+    required: [unit, component]
+    recommended: [integration, idempotency_test, retry_test]
+  message_event_contract:
+    required: [contract, integration]
+    recommended: [consumer_compatibility_test]
+  script_or_cli:
+    required: [component_or_dev_test]
+    recommended: [fixture_based_tests]
+  auth_or_permissions:
+    required: [unit, integration, negative_permission_tests]
+    recommended: [security_review]
+    approval_required: true
+  infrastructure:
+    required: [plan_validation, policy_check]
+    recommended: [sandbox_apply_or_drift_check]
+    approval_required: true
+
+risk_boosters:
+  high_user_impact: add_e2e_or_qa_tests
+  public_api: add_contract_tests
+  concurrency: add_race_or_idempotency_tests
+  large_data: add_performance_or_pagination_tests
+  security_sensitive: add_negative_security_tests
+  external_dependency: add_failure_mode_tests
+  cross_repo: add_contract_or_owner_validation

@@ -1,0 +1,56 @@
+version: 4
+name: Definition of Done v4
+
+task_done_requires:
+  - spec_comprehension_completed
+  - acceptance_criteria_have_ids
+  - implementation_completed_for_in_scope_criteria
+  - relevant_tests_run_or_gap_explained
+  - qa_checklist_created
+  - qa_agent_approved_task
+  - bugs_found_documented
+  - feedback_items_closed_or_deferred_with_approval
+  - agents_log_updated
+  - manager_notification_if_task_pr_ready
+
+story_done_requires:
+  - all_tasks_task_done_or_deferred_with_approval
+  - qa_checklist_completed
+  - qa_agent_approved_story
+  - pm_checklist_completed
+  - pm_agent_approved_story
+  - visual_evidence_completed_when_ui_changed
+  - accessibility_review_completed_when_user_facing
+  - integration_review_completed_when_cross_component
+  - security_review_completed_when_security_relevant
+  - cloud_review_completed_when_infrastructure_relevant
+  - release_readiness_completed
+  - pr_notification_generated
+  - agents_log_summary_generated
+  - human_ai_pm_review_pending
+
+feature_done_requires:
+  - all_stories_story_done_or_deferred_with_approval
+  - feature_level_qa_summary
+  - feature_level_pm_acceptance
+  - integration_or_e2e_confidence_recorded
+  - release_risk_documented
+  - human_ai_pm_review_pending_or_completed
+
+epic_done_requires:
+  - all_features_feature_done_or_deferred_with_approval
+  - epic_acceptance_criteria_validated
+  - qa_summary_prepared
+  - pm_summary_prepared
+  - release_readiness_review_completed
+  - metrics_summary_prepared
+  - human_ai_pm_acceptance_required
+
+not_done_when:
+  - unresolved_blocking_qa_feedback
+  - unresolved_blocking_pm_feedback
+  - missing_agents_log
+  - missing_test_traceability
+  - missing_visual_evidence_for_ui_without_justification
+  - missing_rollback_plan_for_release
+  - hidden_or_unexplained_test_failures

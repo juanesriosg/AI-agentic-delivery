@@ -1,0 +1,63 @@
+version: 3
+name: Testing Lifecycle
+purpose: Define all validation levels expected from autonomous agents.
+
+levels:
+  spec_validation:
+    goal: Confirm requirements are testable.
+    required_when: every_task
+    evidence: spec_comprehension_report
+  static_checks:
+    goal: Catch syntax, type, lint, schema, and dependency issues.
+    required_when: commands_exist
+    examples: [lint, typecheck, build, schema_validation, dependency_scan]
+  unit:
+    goal: Validate isolated logic quickly.
+    required_when: business_logic_or_algorithm_changes
+    evidence: test_command_and_result
+  component:
+    goal: Validate a coherent component with controlled collaborators.
+    required_when: module_service_ui_cli_script_or_job_changes
+    evidence: component_test_result
+  integration:
+    goal: Validate interactions between important parts.
+    required_when: database_api_queue_cache_storage_auth_or_external_adapter_changes
+    evidence: integration_command_and_result
+  contract:
+    goal: Protect API, event, schema, or package contracts.
+    required_when: public_contract_or_cross_repo_boundary_changes
+    evidence: contract_test_or_schema_diff
+  end_to_end:
+    goal: Validate critical user journeys.
+    required_when: critical_flow_or_release_risk
+    evidence: e2e_command_or_manual_steps
+  dev_tests:
+    goal: Developer smoke validation by implementing agent.
+    required_when: automation_insufficient_or_ui_cli_runtime_behavior_changes
+    evidence: exact_steps_and_result
+  qa_tests:
+    goal: Independent acceptance and exploratory validation.
+    required_when: feature_or_epic_completion
+    evidence: qa_handoff_report
+  regression:
+    goal: Ensure discovered bugs stay fixed.
+    required_when: bug_fix_or_bug_found
+    evidence: failing_before_passing_after_when_practical
+
+minimum_by_work_type:
+  docs_only: [spec_validation]
+  pure_refactor: [spec_validation, static_checks, unit]
+  bug_fix: [spec_validation, regression, unit, relevant_component_or_integration]
+  new_business_logic: [spec_validation, unit, component]
+  api_change: [spec_validation, unit, integration, contract]
+  ui_flow: [spec_validation, unit, component, e2e_or_manual_qa]
+  data_access: [spec_validation, unit, integration]
+  script_or_cli: [spec_validation, unit_or_component, dev_tests]
+  epic_completion: [spec_validation, static_checks, unit, integration, e2e_or_qa_tests, qa_handoff]
+
+rules:
+  - Every acceptance criterion must map to at least one test or explicit validation gap.
+  - Prefer fast deterministic tests before slow broad tests.
+  - E2E tests should be few and focused on critical flows.
+  - Unavailable tests must be explained with a follow-up recommendation.
+  - Do not mark agent-done without validation evidence.

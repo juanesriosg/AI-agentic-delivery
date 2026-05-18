@@ -1,0 +1,33 @@
+# Rename this file to .github/CODEOWNERS after customization.
+
+# Global fallback
+* @repo-owner
+
+# Agent governance
+AGENTS.md @repo-owner
+.ai/** @repo-owner
+
+# CI/CD and GitHub config
+.github/** @repo-owner
+
+# Infrastructure
+infra/** @infra-owner
+infrastructure/** @infra-owner
+terraform/** @infra-owner
+cloudformation/** @infra-owner
+cdk/** @infra-owner
+k8s/** @infra-owner
+helm/** @infra-owner
+
+# Database migrations
+migrations/** @db-owner
+database/migrations/** @db-owner
+db/migrations/** @db-owner
+
+# Security-sensitive areas
+**/auth/** @security-owner
+**/security/** @security-owner
+
+# Billing/payment-sensitive areas
+**/billing/** @billing-owner
+**/payments/** @billing-owner

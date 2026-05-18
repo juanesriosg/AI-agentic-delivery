@@ -1,0 +1,48 @@
+version: 2
+runtime_policy:
+  default_runtime: portable
+  supported_runtimes:
+    - local
+    - codex_cloud
+    - ci
+    - github_actions
+    - codespaces
+    - container
+    - unknown_remote
+  setup:
+    required_before_coding:
+      - .ai/scripts/detect-runtime.sh
+      - .ai/scripts/bootstrap-task-env.sh
+    no_global_installs: true
+    no_sudo: true
+    lockfile_first: true
+    task_scoped_environment: true
+    ignored_environment_root: .agent/
+  cloud:
+    assume_ephemeral_filesystem: true
+    assume_network_may_be_restricted: true
+    assume_no_production_credentials: true
+    persist_evidence_in_pr: true
+  local:
+    protect_user_machine_state: true
+    protect_global_package_managers: true
+    protect_shell_configuration: true
+  artifacts:
+    allowed_untracked_roots:
+      - .agent/
+      - tmp/
+      - coverage/
+      - dist/
+      - build/
+    never_commit:
+      - .agent/
+      - .venv/
+      - node_modules/
+      - vendor/bundle/
+      - .pytest_cache/
+      - .mypy_cache/
+      - .ruff_cache/
+      - target/
+      - bin/
+      - obj/
+      - __pycache__/

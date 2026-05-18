@@ -1,0 +1,52 @@
+version: 3
+name: Bug Identification Standard
+purpose: Define how agents discover, classify, and report bugs.
+
+bug_definition: A bug is observed behavior that violates a spec, acceptance criterion, established contract, test oracle, security expectation, or reasonable user expectation.
+
+bug_sources:
+  - failing_tests
+  - exploratory_testing
+  - static_analysis
+  - logs
+  - user_reports
+  - inconsistent_specs
+  - flaky_behavior
+  - performance_anomalies
+  - security_findings
+  - qa_feedback
+
+classification:
+  severity:
+    critical: data_loss_security_breach_outage_or_unrecoverable_failure
+    high: critical_flow_broken_major_regression_or_cross_tenant_issue
+    medium: important_behavior_wrong_with_workaround
+    low: minor_edge_case_cosmetic_or_documentation_gap
+  relationship_to_task:
+    blocking: prevents task acceptance
+    related_non_blocking: related but can be handled separately
+    unrelated: discovered nearby and should become follow_up
+  confidence:
+    confirmed: reproduced_with_evidence
+    suspected: strong_signal_needs_more_validation
+    flaky: intermittent_needs_isolation
+
+required_bug_report_fields:
+  - title
+  - severity
+  - expected_behavior
+  - actual_behavior
+  - reproduction_steps
+  - environment
+  - evidence
+  - suspected_area
+  - blocks_current_task
+  - regression_test_status
+  - recommended_next_action
+
+rules:
+  - Do not silently fix unrelated bugs in the same PR unless they are tiny, low risk, and manager-approved.
+  - Bugs found during task validation must be reported in PR notes or issues.
+  - Add regression tests for confirmed bugs when practical.
+  - Critical and high severity bugs require manager notification.
+  - Flaky tests are bugs in the delivery system and must be recorded.

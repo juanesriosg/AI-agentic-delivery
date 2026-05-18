@@ -1,0 +1,101 @@
+version: 1
+
+forbidden_commands:
+  - "rm -rf"
+  - "git reset --hard"
+  - "git clean -fdx"
+  - "git push --force"
+  - "git branch -D"
+  - "terraform destroy"
+  - "kubectl delete"
+  - "aws s3 rm --recursive"
+  - "dropdb"
+
+forbidden_sql_patterns:
+  - "DROP TABLE"
+  - "DROP DATABASE"
+  - "TRUNCATE TABLE"
+  - "DELETE FROM .*;"
+  - "ALTER TABLE .* DROP COLUMN"
+
+protected_paths:
+  - ".github/**"
+  - ".ai/**"
+  - "infra/**"
+  - "infrastructure/**"
+  - "terraform/**"
+  - "cloudformation/**"
+  - "cdk/**"
+  - "k8s/**"
+  - "kubernetes/**"
+  - "helm/**"
+  - "migrations/**"
+  - "database/migrations/**"
+  - "db/migrations/**"
+  - "secrets/**"
+  - "certs/**"
+  - ".env"
+  - ".env.*"
+
+approval_required_paths:
+  - "Dockerfile"
+  - "docker-compose.yml"
+  - ".github/workflows/**"
+  - "package-lock.json"
+  - "yarn.lock"
+  - "pnpm-lock.yaml"
+  - "poetry.lock"
+  - "requirements.txt"
+  - "pom.xml"
+  - "build.gradle"
+  - "gradle.lockfile"
+
+deletion_rules:
+  default: "deny_protected_deletes"
+  allowed_only_when:
+    - task_explicitly_requires_deletion
+    - file_is_not_protected
+    - deletion_is_documented_in_pr
+    - rollback_is_documented
+    - validation_covers_deletion
+
+dependency_rules:
+  patch_upgrade: "allowed_if_task_related"
+  minor_upgrade: "allowed_if_task_related_and_tests_pass"
+  major_upgrade: "approval_required"
+  new_dependency: "justify_in_pr"
+  dependency_removal: "approval_required_unless_unused_and_tested"
+
+test_rules:
+  forbidden:
+    - "delete_failing_test_to_pass"
+    - "weaken_assertions_without_reason"
+    - "skip_test_without_issue_link"
+    - "remove_security_test_without_owner_approval"
+
+
+v2_destructive_operation_updates:
+  deletion_default: approval_or_pr_explanation_required
+  max_deleted_files_without_manager_review: 5
+  forbidden_commands_without_explicit_approval:
+    - rm -rf
+    - find . -delete
+    - git reset --hard
+    - git clean -fdx
+    - git push --force
+    - terraform destroy
+    - kubectl delete
+    - helm uninstall
+    - aws s3 rm --recursive
+    - DROP TABLE
+    - DROP DATABASE
+    - TRUNCATE TABLE
+  generated_artifacts_never_commit:
+    - .agent/
+    - .venv/
+    - node_modules/
+    - vendor/bundle/
+    - __pycache__/
+    - .pytest_cache/
+    - .mypy_cache/
+    - target/

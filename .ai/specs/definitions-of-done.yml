@@ -1,0 +1,50 @@
+version: 1
+
+task_agent_done:
+  required:
+    - acceptance_criteria_satisfied
+    - code_implemented
+    - tests_added_or_gap_documented
+    - validation_run
+    - pr_created_or_ready
+    - risk_documented
+    - rollback_documented
+    - manager_notified
+    - task_metrics_recorded
+  does_not_mean:
+    - manager_approved
+    - merged
+    - deployed
+    - stakeholder_accepted
+
+feature_agent_complete:
+  required:
+    - all_feature_tasks_agent_done
+    - related_prs_linked
+    - feature_validation_summary_created
+    - known_risks_documented
+    - qa_or_manager_review_requested
+  does_not_mean:
+    - production_ready
+    - stakeholder_accepted
+
+epic_agent_complete:
+  required:
+    - all_epic_features_agent_complete
+    - integration_validation_run_or_plan_created
+    - epic_risk_summary_created
+    - rollback_or_release_notes_created
+    - stakeholder_acceptance_items_listed
+    - manager_notified
+  does_not_mean:
+    - production_deployed
+    - business_accepted
+    - no_remaining_risk
+
+production_done:
+  required:
+    - human_owner_approval
+    - release_validation
+    - rollback_verified
+    - observability_checked
+    - stakeholder_communication_completed

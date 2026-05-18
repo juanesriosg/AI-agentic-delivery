@@ -1,0 +1,27 @@
+version: 4
+name: Screenshot Annotation Schema
+required_fields:
+  - id
+  - severity
+  - actual
+  - expected
+  - recommended_owner_agent
+optional_fields:
+  - story_id
+  - viewport
+  - screenshot_path
+  - selector
+  - box
+  - checklist_item
+  - suggested_fix
+  - verification_required
+box_fields:
+  - x
+  - y
+  - width
+  - height
+severity:
+  - low
+  - medium
+  - high
+  - critical

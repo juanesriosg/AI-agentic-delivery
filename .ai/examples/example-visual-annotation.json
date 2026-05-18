@@ -1,0 +1,14 @@
+{
+  "id": "VQA-001",
+  "story_id": "STORY-register-form",
+  "severity": "medium",
+  "viewport": "mobile-390x844",
+  "screenshot_path": ".agent/stories/STORY-register-form/screenshots/register-empty-mobile.png",
+  "selector": "input[name=email]",
+  "box": {"x": 18, "y": 128, "width": 330, "height": 48},
+  "actual": "Placeholder overlaps the form container border.",
+  "expected": "Placeholder remains inside the input area and never overlaps the container.",
+  "recommended_owner_agent": "frontend-engineer",
+  "suggested_fix": "Adjust input padding/floating-label state and verify mobile + desktop screenshots.",
+  "verification_required": "Visual QA must recheck empty, focused, and invalid states on mobile and desktop."
+}

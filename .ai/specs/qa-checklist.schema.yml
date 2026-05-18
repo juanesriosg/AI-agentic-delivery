@@ -1,0 +1,39 @@
+version: 4
+name: QA Checklist Schema
+required_fields:
+  - story_id
+  - checklist_id
+  - generated_by_agent
+  - generated_at
+  - source_spec
+  - items
+item_fields:
+  - id
+  - category
+  - description
+  - acceptance_criteria
+  - method
+  - expected_result
+  - status
+  - evidence
+  - blocking
+  - owner_agent_if_failed
+categories:
+  - functionality
+  - validation
+  - style_visual
+  - accessibility
+  - integration
+  - api_contract
+  - data
+  - security
+  - performance
+  - reliability
+  - responsive
+  - regression
+allowed_status:
+  - pass
+  - fail
+  - blocked
+  - not_applicable
+  - not_tested_gap_documented

@@ -1,0 +1,62 @@
+name: Data question for AI analyst
+description: Ask the Business Data Analyst Agent to answer a business question using context and read-only SQL.
+title: "[Data Question]: "
+labels: ["ai:data-question", "ai:business-analysis"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The Business Data Analyst Agent can use project context and read-only SQL only. It cannot run DELETE, UPDATE, INSERT, or any mutating command.
+  - type: textarea
+    id: question
+    attributes:
+      label: Business question
+      description: What do you want to know?
+      placeholder: "Example: How many users completed registration last week, and where did they drop off?"
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision this supports
+      description: What decision will you make with the answer?
+    validations:
+      required: true
+  - type: input
+    id: time_range
+    attributes:
+      label: Time range
+      placeholder: "Example: last 7 days, May 2026, since PR #123"
+    validations:
+      required: false
+  - type: textarea
+    id: population
+    attributes:
+      label: Population or cohort
+      placeholder: "Example: active users, all orders, failed login attempts"
+    validations:
+      required: false
+  - type: textarea
+    id: metric_definition
+    attributes:
+      label: Metric definition if known
+      placeholder: "Define the metric, or write unknown and let the agent propose one."
+    validations:
+      required: false
+  - type: textarea
+    id: data_sources
+    attributes:
+      label: Known data sources or tables
+      placeholder: "Example: users, registration_events, orders"
+    validations:
+      required: false
+  - type: dropdown
+    id: sensitivity
+    attributes:
+      label: Data sensitivity
+      options:
+        - Aggregates only
+        - Aggregates plus anonymized examples
+        - Raw PII requested and manager-approved
+    validations:
+      required: true

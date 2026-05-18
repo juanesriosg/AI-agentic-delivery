@@ -1,0 +1,20 @@
+schema: agentic.design_first_policy.v1
+policy: Design First Before Code
+required_before_implementation:
+  - business_need
+  - functional_requirements
+  - non_functional_requirements
+  - architecture_blueprint
+  - data_model_or_explicit_not_applicable
+  - api_contract_or_explicit_not_applicable
+  - cloud_components_or_explicit_not_applicable
+  - frontend_user_flows_or_explicit_not_applicable
+  - programming_paradigm_decision
+  - layer_dependency_order
+  - layered_test_strategy
+hard_blocks:
+  - missing_data_model_when_data_is_involved
+  - missing_api_contract_when_frontend_depends_on_api
+  - missing_terraform_design_for_new_aws_components
+  - missing_test_strategy
+  - vague_architecture

@@ -1,0 +1,83 @@
+version: 3
+name: Agent Task Schema
+
+required_fields:
+  id: "Unique task identifier"
+  title: "Short task title"
+  type: "feature | bugfix | test | refactor | docs | investigation | chore"
+  repo: "Repository name"
+  business_goal: "Why this matters to users/stakeholders/business"
+  technical_goal: "What must change technically"
+  owner: "Human owner"
+  reviewer: "Required reviewer"
+  autonomy_level: "L0-L5"
+  risk_level: "low | medium | high"
+  acceptance_criteria: "List of observable, testable outcomes with IDs when possible"
+  scope: "What can be changed"
+  out_of_scope: "What must not be changed"
+  validation_required: "Expected validation levels and commands if known"
+  rollback_expectation: "How to undo or disable safely"
+
+v3_required_for_agent_execution:
+  spec_sources: "Links or files the agent must read"
+  assumptions_allowed: "Whether the agent may proceed with safe assumptions"
+  clarification_route: "Where/how to ask questions"
+  test_traceability_required: true
+  bug_reporting_required: true
+  qa_handoff_required_for_feature: true
+
+optional_fields:
+  epic_id:
+  dependencies:
+  related_prs:
+  related_issues:
+  affected_users:
+  data_classification:
+  feature_flag:
+  due_date:
+  non_owned_repo_approval:
+  high_risk_approval:
+  expected_test_levels:
+    allowed_values: [spec_validation, static, unit, component, integration, contract, e2e, dev, qa, regression]
+  performance_budget:
+  security_notes:
+  scale_notes:
+  qa_focus_areas:
+  known_ambiguities:
+  notes:
+
+state_values:
+  - backlog
+  - needs_spec
+  - ready_for_agent
+  - claimed
+  - spec_review
+  - in_progress
+  - waiting_for_clarification
+  - safe_progress
+  - self_testing
+  - bug_found
+  - pr_ready
+  - manager_review
+  - changes_requested
+  - qa_ready
+  - qa_testing
+  - done
+  - blocked
+
+acceptance_criteria_rules:
+  must_be_observable: true
+  must_be_testable: true
+  must_have_validation_mapping: true
+  id_format: "AC-### preferred"
+
+agent_done_requires:
+  - spec_comprehension_report
+  - acceptance_criteria_mapping
+  - assumption_register
+  - clarification_status
+  - test_traceability_matrix
+  - validation_evidence
+  - bug_report_summary
+  - self_review
+  - manager_notification

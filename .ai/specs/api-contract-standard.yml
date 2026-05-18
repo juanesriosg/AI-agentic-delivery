@@ -1,0 +1,20 @@
+version: 4
+name: API Contract Standard
+
+contract_must_define:
+  - endpoint_or_event_name
+  - request_schema
+  - response_schema
+  - validation_errors
+  - authorization_behavior
+  - idempotency_behavior_when_relevant
+  - pagination_sorting_filtering_when_relevant
+  - versioning_or_backward_compatibility
+  - rate_limit_or_throttling_behavior_when_relevant
+  - example_success_and_failure_payloads
+
+test_requirements:
+  - backend_contract_tests_or_schema_validation
+  - frontend_mock_or_integration_alignment
+  - error_path_validation
+  - breaking_change_assessment

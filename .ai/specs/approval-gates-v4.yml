@@ -1,0 +1,107 @@
+version: 4
+name: Agentic Agile Approval Gates
+
+gates:
+  task_done:
+    required_approvals:
+      - qa-agent
+    required_artifacts:
+      - spec_comprehension
+      - test_matrix
+      - validation_results
+      - qa_checklist
+      - agents_log
+    forbidden_when:
+      - unresolved_blocking_qa_feedback
+      - hidden_test_failures
+      - missing_acceptance_criteria_mapping
+
+  story_done:
+    required_approvals:
+      - qa-agent
+      - pm-agent
+    required_artifacts:
+      - qa_checklist
+      - pm_checklist
+      - agents_log
+      - feedback_closure_report
+      - pr_notification
+    conditional_artifacts:
+      ui_change:
+        - visual_evidence
+        - screenshots_or_gap
+        - accessibility_review
+      api_change:
+        - api_contract_review
+      database_change:
+        - data_migration_or_safety_review
+      cloud_change:
+        - well_architected_review
+    forbidden_when:
+      - unresolved_blocking_feedback
+      - unresolved_security_high_risk
+      - unresolved_data_deletion_risk
+      - missing_rollback_plan
+
+  feature_done:
+    required_approvals:
+      - qa-agent
+      - pm-agent
+      - release-readiness-agent
+    required_artifacts:
+      - cross_story_qa_summary
+      - feature_acceptance_summary
+      - integration_evidence
+      - release_readiness_report
+      - manager_notification
+
+  epic_done:
+    required_approvals:
+      - qa-agent
+      - pm-agent
+      - release-readiness-agent
+      - human_ai_pm
+    required_artifacts:
+      - epic_acceptance_summary
+      - risk_register
+      - open_followups
+      - release_notes
+      - metrics_summary
+
+promotion_gates:
+  to_qa_user:
+    allowed_by_agents: true
+    requires:
+      - qa_pass
+      - no_blocking_feedback
+      - story_state_updated
+      - promotion_pr_or_branch_prepared
+    human_required: false
+
+  to_staging:
+    allowed_by_agents: true
+    requires:
+      - qa_pass
+      - pm_pass
+      - release_readiness_pass
+      - rollback_plan
+    human_required: manager_or_repo_owner_unless_repo_policy_allows
+
+  to_prod_ready:
+    allowed_by_agents: true
+    requires:
+      - qa_pass
+      - pm_pass
+      - release_readiness_pass
+      - security_pass_when_relevant
+      - cloud_pass_when_relevant
+      - rollback_plan
+      - pr_notification
+    human_required: true
+
+  to_production:
+    allowed_by_agents: false
+    requires:
+      - human_ai_pm_approval
+      - repo_owner_approval
+      - production_deploy_policy

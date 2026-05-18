@@ -1,0 +1,34 @@
+# Agentic runtime artifacts
+.agent/
+.agentic/
+
+# Local virtual environments and caches
+.venv/
+venv/
+.env/
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node/runtime artifacts
+node_modules/
+dist/
+build/
+coverage/
+.playwright/
+
+# Language build outputs
+target/
+bin/
+obj/
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/

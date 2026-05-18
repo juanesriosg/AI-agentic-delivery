@@ -1,0 +1,27 @@
+version: 4
+name: Design Quality Standard
+
+principles:
+  - Reuse existing patterns before inventing new ones.
+  - Visual consistency matters because it reduces user cognitive load.
+  - Components should define all important states before release.
+  - Accessibility is part of design quality.
+  - Design changes should be small, reviewable, and reversible unless approved.
+
+component_review:
+  required_states:
+    - default
+    - hover_or_pressed_when_relevant
+    - focus
+    - loading
+    - disabled
+    - error
+    - success_when_relevant
+  required_responsive_review:
+    - mobile
+    - desktop
+  required_accessibility_review:
+    - labels
+    - focus
+    - touch_target
+    - contrast_risk

@@ -1,0 +1,26 @@
+id: TASK-123
+title: "Fix duplicate customer notification on retry"
+type: bugfix
+repo: "example-org/customer-service"
+business_goal: "Avoid sending duplicate notifications to customers when a retry occurs."
+technical_goal: "Make notification sending idempotent for retryable events."
+owner: "manager-name"
+reviewer: "repo-owner-name"
+autonomy_level: L3
+risk_level: medium
+acceptance_criteria:
+  - "Retrying the same event does not send duplicate notification."
+  - "Existing notification behavior for unique events is unchanged."
+  - "Regression test covers duplicate retry case."
+scope:
+  - "Notification service retry handling."
+  - "Tests for notification idempotency."
+out_of_scope:
+  - "Changing notification provider."
+  - "Changing public API."
+  - "Database schema changes."
+validation_required:
+  - "targeted test for notification service"
+  - "full unit tests if available"
+rollback_expectation: "Revert PR; behavior returns to previous retry handling."
+dependencies: []
