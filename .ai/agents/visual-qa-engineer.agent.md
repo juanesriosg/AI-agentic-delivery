@@ -50,7 +50,7 @@ python .ai/scripts/agent_feedback.py --from-agent visual-qa-engineer --to-agent 
 
 ## Required references
 
-- VISUAL_QA_WORKFLOW.md
+- .ai/docs/reference/VISUAL_QA_WORKFLOW.md
 - .ai/specs/visual-regression-standard.yml
 - .ai/specs/screenshot-annotation.schema.yml
 - .ai/skills/visual-testing-screenshots.skill.md

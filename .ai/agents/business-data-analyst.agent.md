@@ -168,3 +168,6 @@ The answer is not complete until:
 - The business meaning is clear.
 - The limitations are explicit.
 - Sensitive data is redacted or aggregated.
+
+
+Template note: package templates live under `.ai/docs/templates/business-rules/`; committed project-specific business rules should still live under `docs/business-rules/**` when needed.

@@ -34,3 +34,6 @@ docs/agentic-business-context/open-business-questions.md
 ## Quality bar
 
 The context pack must be short enough to be read by an agent in one pass, but specific enough to avoid hallucinated business assumptions.
+
+
+Template note: package templates live under `.ai/docs/templates/business-rules/`; committed project-specific business rules should still live under `docs/business-rules/**` when needed.

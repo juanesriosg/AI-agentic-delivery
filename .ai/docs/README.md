@@ -1,10 +1,10 @@
 # v14 local-first runtime update
 
-Codex agentic SDLC now defaults to `--mode local` and uses `gpt-5.5` with `model_reasoning_effort=xhigh`. Cloud mode is blocked unless explicitly requested with `--allow-cloud` or `AGENTIC_EXPLICIT_CLOUD=true`. See `LOCAL_FIRST_CODEX_RUNTIME_V14.md`.
+Codex agentic SDLC now defaults to `--mode local` and uses `gpt-5.5` with `model_reasoning_effort=xhigh`. Cloud mode is blocked unless explicitly requested with `--allow-cloud` or `AGENTIC_EXPLICIT_CLOUD=true`. See `.ai/docs/reference/LOCAL_FIRST_CODEX_RUNTIME_V14.md`.
 
 # v8 audited/fixed package
 
-Start with `AUDIT_AND_FIX_REPORT.v8.md` and `MANIFEST.v8.md`. This release fixes spec detection, copied-template blocking, scan validation reporting, fallback task routing, local/offline branch behavior, PR guardrails, and AWS/Terraform guardrails.
+Start with `.ai/docs/reports/AUDIT_AND_FIX_REPORT.v8.md` and `.ai/docs/manifests/MANIFEST.v8.md`. This release fixes spec detection, copied-template blocking, scan validation reporting, fallback task routing, local/offline branch behavior, PR guardrails, and AWS/Terraform guardrails.
 
 ---
 
@@ -37,10 +37,10 @@ This package now includes a full specialized-agent software delivery lifecycle w
 
 Start with these v4 files:
 
-- `AGENTIC_SDLC_V4.md`
-- `AGILE_AGENT_ECOSYSTEM.md`
-- `VISUAL_QA_WORKFLOW.md`
-- `AGENT_FEEDBACK_LOOP.md`
+- `.ai/docs/reference/AGENTIC_SDLC_V4.md`
+- `.ai/docs/reference/AGILE_AGENT_ECOSYSTEM.md`
+- `.ai/docs/reference/VISUAL_QA_WORKFLOW.md`
+- `.ai/docs/reference/AGENT_FEEDBACK_LOOP.md`
 - `.ai/specs/story-lifecycle-v4.yml`
 - `.ai/specs/approval-gates-v4.yml`
 - `.ai/specs/specialist-agent-routing.yml`
@@ -275,7 +275,7 @@ implementation branch: ai/<spec-id>-<slug>
 PR target: dev/<feature>
 ```
 
-Read `BRANCH_SPEC_WORKFLOW.md`, `.ai/specs/spec-file-convention.md`, and `.ai/specs/spec-implementation-pipeline.md` before installing this in a repo.
+Read `.ai/docs/reference/BRANCH_SPEC_WORKFLOW.md`, `.ai/specs/spec-file-convention.md`, and `.ai/specs/spec-implementation-pipeline.md` before installing this in a repo.
 
 ## v6 generic spec template
 
@@ -295,7 +295,7 @@ Every PR should now be blocked until the required check passes:
 Agentic Codex PR Review / codex_review_gate
 ```
 
-Install `OPENAI_API_KEY` as a repository secret and add that check to branch protection. See `CODEX_PR_REVIEW_GATE_V9.md`.
+Install `OPENAI_API_KEY` as a repository secret and add that check to branch protection. See `.ai/docs/reference/CODEX_PR_REVIEW_GATE_V9.md`.
 
 ## v10 data analysis agent
 
@@ -327,7 +327,7 @@ New files:
 .ai/skills/branch-conflict-avoidance.skill.md
 .ai/specs/branch-conflict-policy.yml
 .github/workflows/agentic-branch-conflict-guard.yml
-BRANCH_CONFLICT_AVOIDANCE_V11.md
+.ai/docs/reference/BRANCH_CONFLICT_AVOIDANCE_V11.md
 ```
 
 Required status check to add to branch protection:
@@ -351,12 +351,12 @@ The orchestrator runs `.ai/scripts/design_gate.py` before planning and `.ai/scri
 
 For the preferred workflow, create a new branch such as `dev/<feature>`, add a ready spec at `specs/<feature>.spec.md`, and push it. The workflow `.github/workflows/agentic-poc-spec-to-pr.yml` detects the spec, runs Codex agents, pushes validated task commits back to the same spec branch, and creates a final PR from that branch to `main` tagging the AI PM.
 
-Start with `POC_TO_PR_WORKFLOW_V13.md` and `GPT_PRO_POC_SPEC_PUSH_GUIDE.md`.
+Start with `.ai/docs/reference/POC_TO_PR_WORKFLOW_V13.md` and `.ai/docs/reference/GPT_PRO_POC_SPEC_PUSH_GUIDE.md`.
 
 
 ## v14 local-first Codex policy
 
-Agentic SDLC now defaults to local mode with Codex `gpt-5.5` and `model_reasoning_effort=xhigh`. Cloud mode is blocked unless explicitly requested with `--allow-cloud` or `AGENTIC_EXPLICIT_CLOUD=true`. See `LOCAL_FIRST_CODEX_RUNTIME_V14.md`.
+Agentic SDLC now defaults to local mode with Codex `gpt-5.5` and `model_reasoning_effort=xhigh`. Cloud mode is blocked unless explicitly requested with `--allow-cloud` or `AGENTIC_EXPLICIT_CLOUD=true`. See `.ai/docs/reference/LOCAL_FIRST_CODEX_RUNTIME_V14.md`.
 
 ## v15 self-improving agents
 
@@ -375,5 +375,5 @@ Agentic skill improvement gate / skill_improvement_gate
 Agentic Codex PR Review / codex_review_gate
 ```
 
-See `SELF_IMPROVEMENT_V15.md`.
+See `.ai/docs/reference/SELF_IMPROVEMENT_V15.md`.
 

@@ -50,11 +50,11 @@ v10 adds a safe business/data analysis system.
 ## Added examples and docs
 
 ```text
-DATA_ANALYSIS_AGENT_V10.md
+.ai/docs/reference/DATA_ANALYSIS_AGENT_V10.md
 docs/business-rules/_TEMPLATE.business-rules.md
 .ai/examples/example-data-question.md
 .ai/examples/example-data-analysis-answer.md
-V10_DATA_ANALYSIS_UPDATE_REPORT.md
+.ai/docs/reports/V10_DATA_ANALYSIS_UPDATE_REPORT.md
 ```
 
 ## Safety model

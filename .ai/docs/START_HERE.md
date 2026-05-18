@@ -1,10 +1,10 @@
 # v14 start here update
 
-Use local mode by default: `python .ai/scripts/agentic_sdlc.py watch --mode local --poll-seconds 180`. Codex runs with `gpt-5.5` and `model_reasoning_effort=xhigh`. Cloud runs are manual/explicit only. See `LOCAL_FIRST_CODEX_RUNTIME_V14.md`.
+Use local mode by default: `python .ai/scripts/agentic_sdlc.py watch --mode local --poll-seconds 180`. Codex runs with `gpt-5.5` and `model_reasoning_effort=xhigh`. Cloud runs are manual/explicit only. See `.ai/docs/reference/LOCAL_FIRST_CODEX_RUNTIME_V14.md`.
 
 # v8 audited/fixed package
 
-Start with `AUDIT_AND_FIX_REPORT.v8.md` and `MANIFEST.v8.md`. This release fixes spec detection, copied-template blocking, scan validation reporting, fallback task routing, local/offline branch behavior, PR guardrails, and AWS/Terraform guardrails.
+Start with `.ai/docs/reports/AUDIT_AND_FIX_REPORT.v8.md` and `.ai/docs/manifests/MANIFEST.v8.md`. This release fixes spec detection, copied-template blocking, scan validation reporting, fallback task routing, local/offline branch behavior, PR guardrails, and AWS/Terraform guardrails.
 
 ---
 
@@ -42,12 +42,12 @@ This version adds the automation you requested: a Python CLI that runs at repo l
 
 Start with these v5 files:
 
-- `AUTOMATED_AGENTIC_WORKFLOW_V5.md`
-- `MORNING_TO_NIGHT_WORKFLOW.md`
-- `ONE_RESPONSIBILITY_PR_STANDARD.md`
-- `DEV_MANAGER_AGENT_POLICY.md`
-- `TERRAFORM_DEPLOYMENT_STANDARD.md`
-- `CLOUD_CONTINUATION_GUIDE.md`
+- `.ai/docs/reference/AUTOMATED_AGENTIC_WORKFLOW_V5.md`
+- `.ai/docs/reference/MORNING_TO_NIGHT_WORKFLOW.md`
+- `.ai/docs/reference/ONE_RESPONSIBILITY_PR_STANDARD.md`
+- `.ai/docs/reference/DEV_MANAGER_AGENT_POLICY.md`
+- `.ai/docs/reference/TERRAFORM_DEPLOYMENT_STANDARD.md`
+- `.ai/docs/reference/CLOUD_CONTINUATION_GUIDE.md`
 - `.ai/automation/agentic.config.json`
 - `.ai/scripts/agentic_sdlc.py`
 - `.github/workflows/agentic-spec-autostart.yml`
@@ -83,10 +83,10 @@ This package now includes a full specialized-agent software delivery lifecycle w
 
 Start with these v4 files:
 
-- `AGENTIC_SDLC_V4.md`
-- `AGILE_AGENT_ECOSYSTEM.md`
-- `VISUAL_QA_WORKFLOW.md`
-- `AGENT_FEEDBACK_LOOP.md`
+- `.ai/docs/reference/AGENTIC_SDLC_V4.md`
+- `.ai/docs/reference/AGILE_AGENT_ECOSYSTEM.md`
+- `.ai/docs/reference/VISUAL_QA_WORKFLOW.md`
+- `.ai/docs/reference/AGENT_FEEDBACK_LOOP.md`
 - `.ai/specs/story-lifecycle-v4.yml`
 - `.ai/specs/approval-gates-v4.yml`
 - `.ai/specs/specialist-agent-routing.yml`
@@ -106,7 +106,7 @@ To use this kit:
 3. Customize `.ai/specs/ownership-boundaries.yml`.
 4. Customize `.ai/specs/restricted-operations.yml`.
 5. Customize `.github/CODEOWNERS.example` and rename to `.github/CODEOWNERS`.
-6. Add labels from `README.md`.
+6. Add labels from `.ai/docs/README.md`.
 7. Create a project board with lanes from `.ai/specs/board-lanes.md`.
 8. Use `.ai/specs/manager-command-prompts.md` to assign work.
 
@@ -209,7 +209,7 @@ implementation branch: ai/<spec-id>-<slug>
 PR target: dev/<feature>
 ```
 
-Read `BRANCH_SPEC_WORKFLOW.md`, `.ai/specs/spec-file-convention.md`, and `.ai/specs/spec-implementation-pipeline.md` before installing this in a repo.
+Read `.ai/docs/reference/BRANCH_SPEC_WORKFLOW.md`, `.ai/specs/spec-file-convention.md`, and `.ai/specs/spec-implementation-pipeline.md` before installing this in a repo.
 
 ## v9 mandatory Codex PR review
 
@@ -219,7 +219,7 @@ Every PR should now be blocked until the required check passes:
 Agentic Codex PR Review / codex_review_gate
 ```
 
-Install `OPENAI_API_KEY` as a repository secret and add that check to branch protection. See `CODEX_PR_REVIEW_GATE_V9.md`.
+Install `OPENAI_API_KEY` as a repository secret and add that check to branch protection. See `.ai/docs/reference/CODEX_PR_REVIEW_GATE_V9.md`.
 
 ## v10 business questions and SQL analysis
 
@@ -289,12 +289,12 @@ The watcher will block downstream tasks until upstream layer gates are present o
 
 For the preferred workflow, create a new branch such as `dev/<feature>`, add a ready spec at `specs/<feature>.spec.md`, and push it. The workflow `.github/workflows/agentic-poc-spec-to-pr.yml` detects the spec, runs Codex agents, pushes validated task commits back to the same spec branch, and creates a final PR from that branch to `main` tagging the AI PM.
 
-Start with `POC_TO_PR_WORKFLOW_V13.md` and `GPT_PRO_POC_SPEC_PUSH_GUIDE.md`.
+Start with `.ai/docs/reference/POC_TO_PR_WORKFLOW_V13.md` and `.ai/docs/reference/GPT_PRO_POC_SPEC_PUSH_GUIDE.md`.
 
 
 ## v14 local-first Codex policy
 
-Agentic SDLC now defaults to local mode with Codex `gpt-5.5` and `model_reasoning_effort=xhigh`. Cloud mode is blocked unless explicitly requested with `--allow-cloud` or `AGENTIC_EXPLICIT_CLOUD=true`. See `LOCAL_FIRST_CODEX_RUNTIME_V14.md`.
+Agentic SDLC now defaults to local mode with Codex `gpt-5.5` and `model_reasoning_effort=xhigh`. Cloud mode is blocked unless explicitly requested with `--allow-cloud` or `AGENTIC_EXPLICIT_CLOUD=true`. See `.ai/docs/reference/LOCAL_FIRST_CODEX_RUNTIME_V14.md`.
 
 ## v15 self-improving agents
 
@@ -313,5 +313,5 @@ Agentic skill improvement gate / skill_improvement_gate
 Agentic Codex PR Review / codex_review_gate
 ```
 
-See `SELF_IMPROVEMENT_V15.md`.
+See `.ai/docs/reference/SELF_IMPROVEMENT_V15.md`.
 

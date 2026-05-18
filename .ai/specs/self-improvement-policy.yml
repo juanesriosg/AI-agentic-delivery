@@ -31,8 +31,8 @@ allowed_update_targets:
   - .github/ISSUE_TEMPLATE/**/*.yml
   - .github/workflows/agentic-*.yml
   - AGENTS.md
-  - README.md
-  - START_HERE.md
+  - .ai/docs/README.md
+  - .ai/docs/START_HERE.md
 
 blocked_without_explicit_manager_approval:
   - expand_autonomy_level

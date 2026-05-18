@@ -11,7 +11,7 @@ They still cannot silently rewrite their own policy, merge their own improvement
 ## Added
 
 ```text
-SELF_IMPROVEMENT_V15.md
+.ai/docs/reference/SELF_IMPROVEMENT_V15.md
 .ai/agents/feedback-harvester.agent.md
 .ai/agents/skill-improver.agent.md
 .ai/agents/eval-designer.agent.md
@@ -43,10 +43,10 @@ docs/agentic-self-improvement/README.md
 ```text
 AGENTS.md
 README.md
-START_HERE.md
+.ai/docs/START_HERE.md
 .ai/automation/agentic.config.json
 .github/PULL_REQUEST_TEMPLATE.md
-MANIFEST.v15.md
+.ai/docs/manifests/MANIFEST.v15.md
 ```
 
 ## Behavior

@@ -49,6 +49,6 @@ python .ai/scripts/agent_feedback.py --from-agent agent-feedback-coordinator --t
 
 ## Required references
 
-- AGENT_FEEDBACK_LOOP.md
+- .ai/docs/reference/AGENT_FEEDBACK_LOOP.md
 - .ai/specs/agent-feedback-protocol.yml
 - .ai/specs/parallel-execution-policy.yml

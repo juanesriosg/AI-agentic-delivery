@@ -52,7 +52,7 @@ It fails the status check unless the status is explicitly `PASS` and the markers
 .ai/specs/required-status-checks.md
 .ai/agents/codex-pr-reviewer.agent.md
 .ai/skills/codex-pr-review.skill.md
-CODEX_PR_REVIEW_GATE_V9.md
+.ai/docs/reference/CODEX_PR_REVIEW_GATE_V9.md
 ```
 
 ### Updated files
@@ -60,12 +60,12 @@ CODEX_PR_REVIEW_GATE_V9.md
 ```text
 AGENTS.md
 README.md
-START_HERE.md
+.ai/docs/START_HERE.md
 .github/PULL_REQUEST_TEMPLATE.md
 .ai/automation/agentic.config.json
 .ai/scripts/agentic_sdlc.py
 .ai/scripts/generate_pr_notification.py
-DEV_MANAGER_AGENT_POLICY.md
+.ai/docs/reference/DEV_MANAGER_AGENT_POLICY.md
 ```
 
 ## Required repository setup

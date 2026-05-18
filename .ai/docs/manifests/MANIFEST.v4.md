@@ -2,10 +2,10 @@
 
 ## New top-level docs
 
-- `AGENTIC_SDLC_V4.md`
-- `AGILE_AGENT_ECOSYSTEM.md`
-- `VISUAL_QA_WORKFLOW.md`
-- `AGENT_FEEDBACK_LOOP.md`
+- `.ai/docs/reference/AGENTIC_SDLC_V4.md`
+- `.ai/docs/reference/AGILE_AGENT_ECOSYSTEM.md`
+- `.ai/docs/reference/VISUAL_QA_WORKFLOW.md`
+- `.ai/docs/reference/AGENT_FEEDBACK_LOOP.md`
 
 ## New agent types
 

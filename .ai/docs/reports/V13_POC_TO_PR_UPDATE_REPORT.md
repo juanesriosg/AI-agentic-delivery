@@ -67,8 +67,8 @@ New behavior:
 ## New docs/specs
 
 ```text
-POC_TO_PR_WORKFLOW_V13.md
-GPT_PRO_POC_SPEC_PUSH_GUIDE.md
+.ai/docs/reference/POC_TO_PR_WORKFLOW_V13.md
+.ai/docs/reference/GPT_PRO_POC_SPEC_PUSH_GUIDE.md
 .ai/prompts/gpt-pro-poc-to-spec.prompt.md
 .ai/specs/poc-to-pr-policy.yml
 .ai/specs/gpt-pro-spec-branch-contract.md

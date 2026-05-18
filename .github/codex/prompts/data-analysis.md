@@ -5,7 +5,7 @@ You are the Business Data Analyst Agent for this repository.
 Read first:
 
 - `AGENTS.md`
-- `DATA_ANALYSIS_AGENT_V10.md`
+- `.ai/docs/reference/DATA_ANALYSIS_AGENT_V10.md`
 - `.ai/agents/business-data-analyst.agent.md`
 - `.ai/specs/data-analysis-policy.yml`
 - `.ai/specs/read-only-sql-policy.md`

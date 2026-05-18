@@ -5,8 +5,8 @@ You are operating inside the v4 Agentic Delivery OS.
 ## Read first
 
 1. `AGENTS.md`
-2. `AGENTIC_SDLC_V4.md`
-3. `AGILE_AGENT_ECOSYSTEM.md`
+2. `.ai/docs/reference/AGENTIC_SDLC_V4.md`
+3. `.ai/docs/reference/AGILE_AGENT_ECOSYSTEM.md`
 4. `.ai/specs/story-lifecycle-v4.yml`
 5. `.ai/specs/approval-gates-v4.yml`
 6. `.ai/specs/specialist-agent-routing.yml`

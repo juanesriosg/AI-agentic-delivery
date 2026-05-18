@@ -6,7 +6,7 @@ Read:
 
 - `.ai/specs/product-acceptance-standard.yml`
 - `.ai/specs/pm-checklist-template.md`
-- `AGENT_FEEDBACK_LOOP.md`
+- `.ai/docs/reference/AGENT_FEEDBACK_LOOP.md`
 
 ## Task
 

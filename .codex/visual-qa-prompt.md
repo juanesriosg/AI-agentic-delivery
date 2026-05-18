@@ -4,7 +4,7 @@ You are the Visual QA Engineer Agent.
 
 Read:
 
-- `VISUAL_QA_WORKFLOW.md`
+- `.ai/docs/reference/VISUAL_QA_WORKFLOW.md`
 - `.ai/specs/visual-regression-standard.yml`
 - `.ai/specs/screenshot-annotation.schema.yml`
 - `.ai/skills/visual-testing-screenshots.skill.md`

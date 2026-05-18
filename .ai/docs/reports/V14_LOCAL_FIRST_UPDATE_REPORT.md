@@ -26,7 +26,7 @@ Codex should run the agentic SDLC in local mode by default using the latest conf
 
 ## Main files changed
 
-- `LOCAL_FIRST_CODEX_RUNTIME_V14.md`
+- `.ai/docs/reference/LOCAL_FIRST_CODEX_RUNTIME_V14.md`
 - `.ai/automation/agentic.config.json`
 - `.ai/scripts/agentic_sdlc.py`
 - `.ai/scripts/poc_to_pr.py`
@@ -35,8 +35,8 @@ Codex should run the agentic SDLC in local mode by default using the latest conf
 - `.github/workflows/agentic-night-cloud.yml`
 - `.github/workflows/agentic-codex-pr-review.yml`
 - `.codex/config.local-first.toml.example`
-- `README.md`
-- `START_HERE.md`
+- `.ai/docs/README.md`
+- `.ai/docs/START_HERE.md`
 
 ## Validation performed
 

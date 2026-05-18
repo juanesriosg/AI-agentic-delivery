@@ -205,7 +205,7 @@
   "spec_templates": {
     "markdown_template": "specs/_TEMPLATE.agentic-spec.md",
     "yaml_template": "specs/_TEMPLATE.agentic-spec.yml",
-    "guide": "SPEC_TEMPLATE_GUIDE.md",
+    "guide": ".ai/docs/reference/SPEC_TEMPLATE_GUIDE.md",
     "validator": ".ai/scripts/validate_agentic_spec.py",
     "schema": ".ai/specs/spec-template.schema.yml"
   },
@@ -358,7 +358,7 @@
     "night_cloud_manual_only": ".github/workflows/agentic-night-cloud.yml",
     "default_codex_model": "gpt-5.5",
     "default_reasoning_effort": "xhigh",
-    "local_first_update": "LOCAL_FIRST_CODEX_RUNTIME_V14.md",
+    "local_first_update": ".ai/docs/reference/LOCAL_FIRST_CODEX_RUNTIME_V14.md",
     "self_improvement": ".github/workflows/agentic-self-improvement.yml",
     "skill_improvement_gate": ".github/workflows/agentic-skill-improvement-gate.yml"
   },
@@ -401,5 +401,28 @@
     ],
     "github_feedback_harvester": ".ai/scripts/harvest_github_feedback.py",
     "harvest_github_prs": true
+  },
+  "package_layout": {
+    "version": "v16-compact-layout",
+    "root_files": [
+      "AGENTS.md"
+    ],
+    "root_directories": [
+      ".ai",
+      ".codex",
+      ".github",
+      "specs"
+    ],
+    "documentation_dir": ".ai/docs",
+    "install_snippet": ".ai/docs/install/agentic.gitignore.snippet",
+    "root_readme_included": false,
+    "root_gitignore_included": false,
+    "optional_runtime_directories": [
+      "docs/agentic-evidence",
+      "docs/agentic-feedback",
+      "docs/agentic-self-improvement",
+      "docs/business-rules"
+    ],
+    "root_docs_directory_included": false
   }
 }

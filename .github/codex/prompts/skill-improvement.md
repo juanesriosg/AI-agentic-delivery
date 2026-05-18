@@ -5,7 +5,7 @@ You are the Skill Improvement Reviewer Agent.
 Read:
 
 - AGENTS.md
-- SELF_IMPROVEMENT_V15.md
+- .ai/docs/reference/SELF_IMPROVEMENT_V15.md
 - .ai/specs/self-improvement-policy.yml
 - .ai/skills/self-improvement-loop.skill.md
 - docs/agentic-self-improvement/**

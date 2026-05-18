@@ -5,9 +5,9 @@ This update adds architecture/design readiness, DB → API → frontend dependen
 ## New root docs
 
 ```text
-DESIGN_FIRST_LAYERED_TESTING_V12.md
-V12_DESIGN_LAYERED_UPDATE_REPORT.md
-MANIFEST.v12.md
+.ai/docs/reference/DESIGN_FIRST_LAYERED_TESTING_V12.md
+.ai/docs/reports/V12_DESIGN_LAYERED_UPDATE_REPORT.md
+.ai/docs/manifests/MANIFEST.v12.md
 ```
 
 ## New agents
@@ -68,9 +68,9 @@ MANIFEST.v12.md
 .ai/automation/agentic.config.json
 AGENTS.md
 README.md
-START_HERE.md
-ONE_RESPONSIBILITY_PR_STANDARD.md
-DEV_MANAGER_AGENT_POLICY.md
+.ai/docs/START_HERE.md
+.ai/docs/reference/ONE_RESPONSIBILITY_PR_STANDARD.md
+.ai/docs/reference/DEV_MANAGER_AGENT_POLICY.md
 specs/_TEMPLATE.agentic-spec.md
 specs/_TEMPLATE.agentic-spec.yml
 ```

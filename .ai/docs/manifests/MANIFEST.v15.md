@@ -4,7 +4,7 @@ v15 builds on v14 local-first Codex execution and adds controlled self-improveme
 
 ## Core files
 
-- `SELF_IMPROVEMENT_V15.md`
+- `.ai/docs/reference/SELF_IMPROVEMENT_V15.md`
 - `.ai/specs/self-improvement-policy.yml`
 - `.ai/skills/self-improvement-loop.skill.md`
 - `.ai/scripts/skill_improvement_loop.py`

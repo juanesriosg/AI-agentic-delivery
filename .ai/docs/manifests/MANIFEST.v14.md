@@ -2,9 +2,9 @@
 
 ## Added
 
-- `LOCAL_FIRST_CODEX_RUNTIME_V14.md`
-- `V14_LOCAL_FIRST_UPDATE_REPORT.md`
-- `MANIFEST.v14.md`
+- `.ai/docs/reference/LOCAL_FIRST_CODEX_RUNTIME_V14.md`
+- `.ai/docs/reports/V14_LOCAL_FIRST_UPDATE_REPORT.md`
+- `.ai/docs/manifests/MANIFEST.v14.md`
 - `.codex/config.local-first.toml.example`
 
 ## Updated
@@ -16,11 +16,11 @@
 - `.github/workflows/agentic-spec-autostart.yml`
 - `.github/workflows/agentic-night-cloud.yml`
 - `.github/workflows/agentic-codex-pr-review.yml`
-- `README.md`
-- `START_HERE.md`
-- `POC_TO_PR_WORKFLOW_V13.md`
-- `MORNING_TO_NIGHT_WORKFLOW.md`
-- `CLOUD_CONTINUATION_GUIDE.md`
+- `.ai/docs/README.md`
+- `.ai/docs/START_HERE.md`
+- `.ai/docs/reference/POC_TO_PR_WORKFLOW_V13.md`
+- `.ai/docs/reference/MORNING_TO_NIGHT_WORKFLOW.md`
+- `.ai/docs/reference/CLOUD_CONTINUATION_GUIDE.md`
 
 ## Runtime defaults
 

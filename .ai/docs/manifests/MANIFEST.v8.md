@@ -15,4 +15,4 @@ v8 is the corrected audit release of the automated agentic SDLC package.
 - PR guardrails enforce one-responsibility PRs, real tests, QA/PM evidence, and no evidence-only PRs.
 - AWS guardrails require Terraform-backed infrastructure and block raw mutating AWS CLI commands.
 
-See `AUDIT_AND_FIX_REPORT.v8.md` for details and validation evidence.
+See `.ai/docs/reports/AUDIT_AND_FIX_REPORT.v8.md` for details and validation evidence.

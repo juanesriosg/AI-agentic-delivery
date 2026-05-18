@@ -3,7 +3,7 @@
 ## Added
 
 ```text
-BRANCH_CONFLICT_AVOIDANCE_V11.md
+.ai/docs/reference/BRANCH_CONFLICT_AVOIDANCE_V11.md
 .ai/scripts/branch_conflict_guard.py
 .ai/agents/branch-conflict-coordinator.agent.md
 .ai/skills/branch-conflict-avoidance.skill.md
@@ -17,9 +17,9 @@ BRANCH_CONFLICT_AVOIDANCE_V11.md
 ```text
 AGENTS.md
 README.md
-START_HERE.md
-ONE_RESPONSIBILITY_PR_STANDARD.md
-DEV_MANAGER_AGENT_POLICY.md
+.ai/docs/START_HERE.md
+.ai/docs/reference/ONE_RESPONSIBILITY_PR_STANDARD.md
+.ai/docs/reference/DEV_MANAGER_AGENT_POLICY.md
 .ai/automation/agentic.config.json
 .ai/scripts/agentic_sdlc.py
 .ai/scripts/pr_guardrails.py

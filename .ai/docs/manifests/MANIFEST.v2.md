@@ -109,6 +109,6 @@
 - `.github/workflows/agent-guardrails.yml`
 - `.github/workflows/agent-pr-checks.yml`
 - `AGENTS.md`
-- `MANIFEST.v2.md`
-- `README.md`
-- `START_HERE.md`
+- `.ai/docs/manifests/MANIFEST.v2.md`
+- `.ai/docs/README.md`
+- `.ai/docs/START_HERE.md`

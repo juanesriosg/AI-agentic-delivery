@@ -5,7 +5,7 @@ Built from v8 audited-fixed.
 ## New files
 
 ```text
-CODEX_PR_REVIEW_GATE_V9.md
+.ai/docs/reference/CODEX_PR_REVIEW_GATE_V9.md
 .github/workflows/agentic-codex-pr-review.yml
 .github/workflows/agentic-codex-review-request.yml
 .github/codex/prompts/pr-review.md
@@ -22,10 +22,10 @@ CODEX_PR_REVIEW_GATE_V9.md
 ```text
 AGENTS.md
 README.md
-START_HERE.md
+.ai/docs/START_HERE.md
 .github/PULL_REQUEST_TEMPLATE.md
 .ai/automation/agentic.config.json
-DEV_MANAGER_AGENT_POLICY.md
+.ai/docs/reference/DEV_MANAGER_AGENT_POLICY.md
 .ai/scripts/agentic_sdlc.py
 .ai/scripts/generate_pr_notification.py
 ```

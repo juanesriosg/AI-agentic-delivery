@@ -35,6 +35,7 @@ CONTROLLED_PREFIXES = (
     ".ai/specs/",
     ".ai/evals/",
     ".github/codex/prompts/",
+    ".ai/docs/",
 )
 
 
@@ -70,7 +71,7 @@ def main() -> int:
     args = p.parse_args()
 
     files = diff_files(args.base)
-    controlled = [f for f in files if f.startswith(CONTROLLED_PREFIXES) or f in {"AGENTS.md", "README.md", "START_HERE.md"}]
+    controlled = [f for f in files if f.startswith(CONTROLLED_PREFIXES) or f in {"AGENTS.md"}]
     errors: List[str] = []
     warnings: List[str] = []
 

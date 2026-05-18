@@ -12,7 +12,7 @@ specs/_TEMPLATE.agentic-spec.yml
 .ai/examples/example-completed-generic-spec.md
 .ai/scripts/validate_agentic_spec.py
 .github/workflows/agentic-spec-template-validation.yml
-SPEC_TEMPLATE_GUIDE.md
+.ai/docs/reference/SPEC_TEMPLATE_GUIDE.md
 ```
 
 ## Purpose

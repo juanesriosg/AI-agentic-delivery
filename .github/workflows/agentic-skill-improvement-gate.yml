@@ -11,8 +11,7 @@ on:
       - '.ai/scripts/**'
       - '.github/codex/prompts/**'
       - 'AGENTS.md'
-      - 'README.md'
-      - 'START_HERE.md'
+      - '.ai/docs/**'
       - 'docs/agentic-self-improvement/**'
 
 permissions:

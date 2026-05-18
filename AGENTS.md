@@ -569,7 +569,7 @@ Required files:
 .ai/scripts/safe_sql_query.py
 .ai/scripts/build_business_context.py
 .ai/specs/data-analysis-policy.yml
-DATA_ANALYSIS_AGENT_V10.md
+.ai/docs/reference/DATA_ANALYSIS_AGENT_V10.md
 ```
 
 ## Global rule: branch conflict avoidance
@@ -653,3 +653,10 @@ python .ai/scripts/skill_eval_runner.py --all
 python .ai/scripts/skill_guardrails.py --base main
 ```
 
+
+
+## Compact repository layout
+
+This repository uses the compact Agentic OS layout. Keep framework manuals, historical reports, and package manifests under `.ai/docs/**` instead of the repository root. Root-level files should stay minimal: `AGENTS.md`, `.ai/`, `.codex/`, `.github/`, and `specs/`.
+
+Agents must not create new root-level framework Markdown files. Put operational reference docs in `.ai/docs/reference/`, validation/update reports in `.ai/docs/reports/`, and install notes in `.ai/docs/install/`.

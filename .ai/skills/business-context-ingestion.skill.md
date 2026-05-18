@@ -33,3 +33,6 @@ python .ai/scripts/build_business_context.py \
 - Known metrics.
 - Open business questions.
 - Data entities and likely source tables.
+
+
+Template note: package templates live under `.ai/docs/templates/business-rules/`; committed project-specific business rules should still live under `docs/business-rules/**` when needed.

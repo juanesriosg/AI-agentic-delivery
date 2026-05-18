@@ -15,4 +15,4 @@ v7 is an audited/fixed release of the repo-level agentic SDLC ecosystem.
 - Legacy duplicate workflows are manual-only.
 - GitHub secret condition usage was corrected.
 
-See `AUDIT_REPORT_V7.md` for detailed findings and validation.
+See `.ai/docs/reports/AUDIT_REPORT_V7.md` for detailed findings and validation.
