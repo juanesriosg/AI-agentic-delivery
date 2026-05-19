@@ -4,7 +4,16 @@ Use this template for any feature, bugfix, infrastructure change, data change, o
 
 ## Recommended location
 
-Place specs in one of these paths so the repo-level automation can detect them:
+For product work, use the PRD/TRD/task-list package:
+
+```text
+specs/<story-or-feature>/prd.md
+specs/<story-or-feature>/implementation-plan.md
+specs/<story-or-feature>/trds/trd-<task-id>-<short-slug>.md
+specs/<story-or-feature>/tasks/tasks-trd-<task-id>-<short-slug>.md
+```
+
+Place legacy single-file specs in one of these paths so the repo-level automation can detect them:
 
 ```text
 specs/<story-or-feature>.spec.md
@@ -19,16 +28,21 @@ Recommended branch:
 dev/<story-or-feature>
 ```
 
-## Two template formats
+## Template formats
 
 This package includes:
 
 ```text
+specs/_TEMPLATE.spec-package.md
+specs/_TEMPLATE.prd.md
+specs/_TEMPLATE.implementation-plan.md
+specs/_TEMPLATE.trd.md
+specs/_TEMPLATE.task-list.md
 specs/_TEMPLATE.agentic-spec.md
 specs/_TEMPLATE.agentic-spec.yml
 ```
 
-Use Markdown when writing specs with ChatGPT Pro because it is easier to reason about, review, and improve.
+Use the PRD/TRD/task-list templates for substantial product work. Use the older agentic templates only for small one-file changes.
 Use YAML when you want automation to parse the spec more strictly.
 
 ## Readiness status
@@ -39,7 +53,7 @@ Reusable templates are `draft` by default. A real copied spec should be changed 
 status: ready_for_agents
 ```
 
-Only specs with an allowed ready status are automatically implemented. This prevents copied templates, experiments, and incomplete specs from starting autonomous code work.
+Only specs with an allowed ready status are automatically implemented. In a PRD/TRD package, set `ready_for_agents` on the most granular document that should run. Prefer a task list over a TRD, a TRD over an implementation plan, and an implementation plan over a PRD.
 
 ## Minimum fields before agents should start coding
 
@@ -69,6 +83,8 @@ Good:
 ```text
 The registration form must show an inline error below the email input when the email is invalid. The submit button remains disabled until required fields are valid.
 ```
+
+For package documents, see `.ai/specs/spec-package-convention.md`.
 
 Weak:
 

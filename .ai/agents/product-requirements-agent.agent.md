@@ -11,6 +11,8 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 ## Responsibilities
 
 - Read specs deeply and extract business goals, users, user journeys, acceptance criteria, constraints, and non-goals.
+- Create and maintain PRDs using `specs/_TEMPLATE.prd.md` when the manager asks for product source-of-truth documentation.
+- Keep PRDs separate from implementation plans, TRDs, and executable task lists.
 - Create missing requirement details when they are safe and label assumptions clearly.
 - Ask focused clarifying questions for behavior, risk, ownership, data, compliance, or product ambiguity.
 - Map every requirement to observable acceptance criteria with IDs.
@@ -25,6 +27,7 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 ## Outputs
 
 - User story brief.
+- PRD package document: `specs/<story-or-feature>/prd.md`.
 - Acceptance criteria list with IDs.
 - Requirements risk register.
 - Clarification request when needed.
@@ -36,6 +39,8 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 - Every acceptance criterion must be testable by QA or explicitly marked as not yet testable.
 - Separate must-have requirements from nice-to-have ideas.
 - Preserve stakeholder language when product intent is uncertain.
+- Preserve `TBD` as unresolved. Do not fill placeholders with guesses.
+- Use the source-of-truth chain `PRD -> Implementation Plan -> TRD -> Task List`.
 
 ## Required evidence
 
@@ -54,5 +59,7 @@ python .ai/scripts/agent_feedback.py --from-agent product-requirements-agent --t
 ## Required references
 
 - .ai/specs/spec-comprehension-standard.yml
+- .ai/specs/spec-package-convention.md
 - .ai/specs/product-acceptance-standard.yml
 - .ai/skills/spec-reading.skill.md
+- .ai/skills/create-prd.skill.md

@@ -2,13 +2,48 @@
 
 Specs created with ChatGPT/pro models should be written so an autonomous agent can implement and test them without guessing.
 
-Use this location by default:
+## Preferred PRD/TRD package
+
+Use the PRD/TRD/task-list package by default for real product work:
+
+```text
+specs/<story-or-feature>/
+  prd.md
+  implementation-plan.md
+  trds/
+    trd-<task-id>-<short-slug>.md
+  tasks/
+    tasks-trd-<task-id>-<short-slug>.md
+```
+
+Templates:
+
+```text
+specs/_TEMPLATE.prd.md
+specs/_TEMPLATE.implementation-plan.md
+specs/_TEMPLATE.trd.md
+specs/_TEMPLATE.task-list.md
+```
+
+Every file should include `doc_type: prd | implementation_plan | trd | task_list`.
+
+Only the most granular document that should start agent work should use:
+
+```yaml
+status: ready_for_agents
+```
+
+## Legacy single-file format
+
+The older single-file agentic spec remains supported for small changes.
+
+Use this location:
 
 ```text
 specs/<feature-or-epic>.spec.md
 ```
 
-## Required format
+## Required legacy format
 
 ```md
 # Feature Spec: <short name>
@@ -91,3 +126,5 @@ Weak:
 ## Agent interpretation rules
 
 If the spec contains weak or ambiguous acceptance criteria, the agent must ask focused clarification questions. The agent must still continue safe progress such as repo discovery, existing behavior tests, fixtures, and low-risk characterization work.
+
+For PRD/TRD packages, agents must read `.ai/specs/spec-package-convention.md` and use the source-of-truth order `PRD -> Implementation Plan -> TRD -> Task List`.

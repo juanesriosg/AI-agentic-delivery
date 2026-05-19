@@ -93,7 +93,7 @@ def load_event() -> Dict[str, Any]:
         return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
@@ -162,7 +162,7 @@ def read_file(path: str) -> str:
         return ""
     try:
         return p.read_text(encoding="utf-8", errors="replace")
-    except Exception:
+    except OSError:
         return ""
 
 
@@ -185,6 +185,26 @@ def parse_front_matter_status(text: str) -> str:
     return ""
 
 
+def parse_front_matter_value(text: str, wanted: str) -> str:
+    if not text.startswith("---\n"):
+        return ""
+    end = text.find("\n---\n", 4)
+    if end == -1:
+        return ""
+    wanted_norm = normalize_status(wanted)
+    for line in text[4:end].splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        if normalize_status(key) == wanted_norm:
+            value = value.strip().strip('"').strip("'")
+            if " #" in value:
+                value = value.split(" #", 1)[0].strip()
+            return value
+    return ""
+
+
 def parse_body_status(text: str) -> str:
     for line in text.splitlines():
         m = re.match(r"^\s*(?:[-*]\s*)?(?:\*\*)?(status|spec_status|agent_status|implementation_status)(?:\*\*)?\s*[:=]\s*`?([^`#]+)`?", line, re.I)
@@ -196,6 +216,24 @@ def parse_body_status(text: str) -> str:
 def spec_status(path: str) -> str:
     text = read_file(path)
     return parse_front_matter_status(text) or parse_body_status(text)
+
+
+def spec_doc_type(path: str) -> str:
+    text = read_file(path)
+    explicit = parse_front_matter_value(text, "doc_type")
+    if explicit:
+        return normalize_status(explicit)
+    lowered = text.lower()
+    name = Path(path).name.lower()
+    if name.startswith("tasks-") or "# task list" in lowered:
+        return "task_list"
+    if "task requirements document" in lowered:
+        return "trd"
+    if "implementation plan by phases" in lowered or name == "implementation-plan.md":
+        return "implementation_plan"
+    if "prd master" in lowered or "product requirements" in lowered or name == "prd.md":
+        return "prd"
+    return "agentic"
 
 
 def placeholder_hits(path: str) -> List[str]:
@@ -272,6 +310,7 @@ def detect(
         raw_status = spec_status(path)
         normalized = normalize_status(raw_status)
         item["spec_status"] = raw_status
+        item["doc_type"] = spec_doc_type(path)
         unresolved = placeholder_hits(path)
         if unresolved:
             item["dispatch"] = False
@@ -316,7 +355,7 @@ def markdown(report: Dict[str, Any]) -> str:
     specs = report.get("specs", [])
     if specs:
         for spec in specs:
-            lines.append(f"- `{spec['path']}` ({spec['status']}) status=`{spec.get('spec_status', '')}`")
+            lines.append(f"- `{spec['path']}` ({spec['status']}) type=`{spec.get('doc_type', 'agentic')}` status=`{spec.get('spec_status', '')}`")
     else:
         lines.append("- None")
     lines.append("")

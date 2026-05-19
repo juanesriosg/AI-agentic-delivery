@@ -203,9 +203,16 @@
     "skill_improvement_reviewer": "skill-improvement-reviewer.agent.md"
   },
   "spec_templates": {
-    "markdown_template": "specs/_TEMPLATE.agentic-spec.md",
+    "spec_package_template": "specs/_TEMPLATE.spec-package.md",
+    "prd_template": "specs/_TEMPLATE.prd.md",
+    "implementation_plan_template": "specs/_TEMPLATE.implementation-plan.md",
+    "trd_template": "specs/_TEMPLATE.trd.md",
+    "task_list_template": "specs/_TEMPLATE.task-list.md",
+    "markdown_template": "specs/_TEMPLATE.prd.md",
+    "legacy_markdown_template": "specs/_TEMPLATE.agentic-spec.md",
     "yaml_template": "specs/_TEMPLATE.agentic-spec.yml",
     "guide": ".ai/docs/reference/SPEC_TEMPLATE_GUIDE.md",
+    "package_convention": ".ai/specs/spec-package-convention.md",
     "validator": ".ai/scripts/validate_agentic_spec.py",
     "schema": ".ai/specs/spec-template.schema.yml"
   },

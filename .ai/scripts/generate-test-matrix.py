@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 def read_text(path: Path) -> str:
@@ -13,6 +13,22 @@ def read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return path.read_text(errors="replace")
+
+
+def parse_front_matter(text: str) -> Dict[str, str]:
+    if not text.startswith("---\n"):
+        return {}
+    end = text.find("\n---\n", 4)
+    if end == -1:
+        return {}
+    data: Dict[str, str] = {}
+    for line in text[4:end].splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        data[key.strip()] = value.strip().strip('"').strip("'")
+    return data
 
 
 def normalize_ac_id(raw: str, counter: int) -> str:
@@ -84,6 +100,25 @@ def acceptance_criteria(text: str) -> List[Tuple[str, str]]:
     return unique
 
 
+def linked_acceptance_criteria(path: Path, text: str) -> List[Tuple[str, str]]:
+    acs = acceptance_criteria(text)
+    if acs and acs != [("AC-001", "<add acceptance criterion>")]:
+        return acs
+    front = parse_front_matter(text)
+    for key in ("source_trd", "source_prd"):
+        linked = front.get(key, "")
+        if not linked:
+            continue
+        linked_path = (path.parent / linked).resolve() if not Path(linked).is_absolute() else Path(linked)
+        if not linked_path.exists():
+            linked_path = Path(linked)
+        if linked_path.exists():
+            linked_acs = acceptance_criteria(read_text(linked_path))
+            if linked_acs and linked_acs != [("AC-001", "<add acceptance criterion>")]:
+                return linked_acs
+    return acs
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("spec_path", nargs="?", help="Spec path. Kept for backward-compatible positional usage.")
@@ -92,8 +127,9 @@ def main() -> int:
     selected = args.spec or args.spec_path
     if not selected:
         parser.error("one of --spec or spec_path is required")
-    text = read_text(Path(selected))
-    acs = acceptance_criteria(text)
+    selected_path = Path(selected)
+    text = read_text(selected_path)
+    acs = linked_acceptance_criteria(selected_path, text)
     print("# Spec-to-Test Traceability Matrix")
     print("")
     print("| AC ID | Requirement | Unit | Component | Integration | Contract | E2E | Dev/QA | Evidence | Status |")

@@ -31,6 +31,23 @@ Risk classification:
 Test traceability:
 ```
 
+For PRD/TRD packages, comprehension must include document type and source document paths:
+
+```md
+Document type:
+PRD:
+Implementation plan:
+TRD:
+Task list:
+Conflict check:
+```
+
+Agents must read package documents in this authority order:
+
+```text
+PRD -> Implementation Plan -> TRD -> Task List
+```
+
 ## Stage 2 — Planning
 
 The agent must create a small implementation plan:
@@ -42,6 +59,8 @@ Tests to add first:
 Risks:
 Rollback:
 ```
+
+If the changed document is only a PRD, create or update `implementation-plan.md` before coding. If it is an implementation plan, create TRDs before coding. If it is a TRD, create or verify the task list before coding. If it is a ready task list, implement from the task list while checking the linked TRD, plan, and PRD for conflicts.
 
 ## Stage 3 — Test-first or test-near-first work
 

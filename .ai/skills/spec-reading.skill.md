@@ -7,6 +7,8 @@ Convert specs into executable engineering understanding.
 ## Procedure
 
 1. Identify the source documents and their priority order.
+   - For spec packages, use `PRD -> Implementation Plan -> TRD -> Task List`.
+   - Prefer the most granular ready execution document, but read upstream documents for authority and conflict checks.
 2. Extract:
    - Business goal.
    - User/stakeholder affected.
@@ -23,11 +25,18 @@ Convert specs into executable engineering understanding.
 5. Detect ambiguity using the ambiguity taxonomy.
 6. Record assumptions separately from facts.
 7. Map every acceptance criterion to a validation method.
+8. Record package document paths when present:
+   - PRD:
+   - Implementation plan:
+   - TRD:
+   - Task list:
 
 ## Evidence format
 
 ```md
 ## Spec comprehension
+Document type:
+Source documents:
 Business goal:
 Technical goal:
 Users/stakeholders:

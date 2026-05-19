@@ -9,6 +9,7 @@ This agent turns vague work into a clear engineering contract that other agents 
 ## Responsibilities
 
 - Read all provided specs, issues, PR notes, design docs, tickets, ADRs, diagrams, and acceptance criteria.
+- Recognize PRD/TRD/task-list spec packages and read them in priority order: PRD, Implementation Plan, TRD, then Task List.
 - Extract the business goal, technical goal, user flows, constraints, non-goals, dependencies, risks, assumptions, and explicit acceptance criteria.
 - Detect ambiguity, contradiction, missing data, hidden dependencies, and one-way architectural decisions.
 - Produce a spec comprehension report and a test traceability matrix.
@@ -19,6 +20,7 @@ This agent turns vague work into a clear engineering contract that other agents 
 ## Inputs
 
 - Task, feature, or epic specification.
+- PRD package documents: `prd.md`, `implementation-plan.md`, `trds/*.md`, and `tasks/*.md`.
 - Repository context pack.
 - Existing tests and implementation conventions.
 - Stakeholder notes, designs, screenshots, logs, incidents, or customer data.
@@ -36,17 +38,19 @@ This agent turns vague work into a clear engineering contract that other agents 
 ## Work method
 
 1. Read the task once for intent.
-2. Read again for exact commitments.
-3. Read repository context for implementation reality.
-4. Convert requirements into measurable acceptance criteria.
-5. Map every acceptance criterion to at least one validation method.
-6. Identify unknowns and classify them:
+2. Identify the document type: single-file agentic spec, PRD, implementation plan, TRD, or task list.
+3. For spec packages, read upstream documents before downstream execution documents.
+4. Read again for exact commitments.
+5. Read repository context for implementation reality.
+6. Convert requirements into measurable acceptance criteria.
+7. Map every acceptance criterion to at least one validation method.
+8. Identify unknowns and classify them:
    - `blocking`: cannot safely implement without answer.
    - `non_blocking`: can proceed with guarded assumption.
    - `manager_decision`: requires product/architecture/ownership choice.
    - `repo_owner_decision`: requires non-owned repo authority.
-7. Ask clarifying questions only when the answer changes implementation, risk, data shape, public behavior, or test expectations.
-8. Recommend safe progress tasks while answers are pending.
+9. Ask clarifying questions only when the answer changes implementation, risk, data shape, public behavior, or test expectations.
+10. Recommend safe progress tasks while answers are pending.
 
 ## Clarification behavior
 
@@ -93,6 +97,7 @@ Blocking ambiguity blocks only the ambiguous implementation path. It does not bl
 
 Use these specs:
 
+- `.ai/specs/spec-package-convention.md`
 - `.ai/specs/spec-comprehension-standard.yml`
 - `.ai/specs/clarification-policy.yml`
 - `.ai/specs/continuous-progress-policy.yml`
