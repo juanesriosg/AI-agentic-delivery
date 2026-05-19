@@ -23,6 +23,8 @@ import subprocess
 import sys
 import textwrap
 import time
+import threading
+import queue
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -116,10 +118,8 @@ def run(
             + f"\n{exc}"
         ) from exc
 
-
 def which(binary: str) -> Optional[str]:
     return shutil.which(binary)
-
 
 def resolve_executable(binary: str, *, prefer_cmd_on_windows: bool = False) -> Optional[str]:
     """Resolve a command to a CreateProcess-safe executable path.
@@ -1487,14 +1487,22 @@ class AgenticSDLC:
             sequence.insert(6, ("accessibility-qa-engineer.agent.md", "check accessibility and usability", True))
         if mode == "cloud":
             sequence.insert(2, ("cloud-night-worker.agent.md", "avoid local-only assumptions and continue cloud-safe work", False))
-        for agent_file, objective, allow_write in sequence:
+
+        total = len(sequence)
+        self.log(f"    Agent sequence: {total} agent step(s) for task {task.task_id}")
+        for index, (agent_file, objective, allow_write) in enumerate(sequence, start=1):
             agent_name = agent_file.replace(".agent.md", "")
             prompt = self.render_task_prompt(agent_file, objective, spec, task, story_dir, task_dir, mode)
             prompt_path = task_dir / "prompts" / f"{safe_slug(agent_name)}.md"
             write_text(prompt_path, prompt)
-            self.write_agent_log(story_dir, agent_name, objective, "started", f"Task {task.task_id}")
+            self.log(f"    [{index}/{total}] START {agent_name}: {objective}")
+            self.log(f"        prompt: {prompt_path}")
+            self.write_agent_log(story_dir, agent_name, objective, "started", f"Task {task.task_id}; step {index}/{total}; prompt={prompt_path}")
+            started = time.monotonic()
             self.call_codex(prompt, cwd=worktree, run_dir=task_dir, agent=agent_name, mode=mode, allow_write=allow_write)
-            self.write_agent_log(story_dir, agent_name, objective, "completed", f"Task {task.task_id}")
+            elapsed = time.monotonic() - started
+            self.write_agent_log(story_dir, agent_name, objective, "completed", f"Task {task.task_id}; step {index}/{total}; elapsed={elapsed:.1f}s")
+            self.log(f"    [{index}/{total}] DONE  {agent_name} elapsed={elapsed:.1f}s")
 
     def resolve_domain_agent(self, domain: str) -> str:
         domain = domain.lower()
@@ -1630,16 +1638,21 @@ class AgenticSDLC:
         configured_codex_bin = self.config["codex"].get("binary", "codex")
         codex_bin = resolve_executable(str(configured_codex_bin), prefer_cmd_on_windows=True)
         prompt_hash = short_sha(prompt, 10)
-        out_file = run_dir / "codex" / f"{agent}-{prompt_hash}.jsonl"
-        final_file = run_dir / "codex" / f"{agent}-{prompt_hash}.final.md"
-        out_file.parent.mkdir(parents=True, exist_ok=True)
+        codex_dir = run_dir / "codex"
+        out_file = codex_dir / f"{agent}-{prompt_hash}.jsonl"
+        final_file = codex_dir / f"{agent}-{prompt_hash}.final.md"
+        stderr_file = codex_dir / f"{agent}-{prompt_hash}.stderr.log"
+        heartbeat_file = codex_dir / f"{agent}-{prompt_hash}.heartbeat.jsonl"
+        codex_dir.mkdir(parents=True, exist_ok=True)
         if self.dry_run:
             write_text(final_file, f"DRY-RUN: would run {agent} in {cwd}\n")
+            self.log(f"        DRY-RUN would run Codex agent={agent} cwd={cwd}")
             return
         if codex_bin is None:
             write_text(final_file, f"Codex binary not found. Prompt saved for manual/local execution.\n")
             write_text(run_dir / "prompts_missing_codex" / f"{agent}-{prompt_hash}.md", prompt)
             if self.dry_run or bool(self.config["codex"].get("allow_missing_codex", False)):
+                self.log(f"        Codex binary missing; prompt saved for {agent}")
                 return
             raise OrchestratorError(f"Codex binary not found: {configured_codex_bin}. Install Codex CLI, run with --dry-run, or set codex.allow_missing_codex=true only for prompt-generation workflows.")
         sandbox = self.config["codex"].get("sandbox", "workspace-write") if allow_write else "read-only"
@@ -1650,7 +1663,8 @@ class AgenticSDLC:
         reasoning_summary = self.config["codex"].get("reasoning_summary", "concise")
         verbosity = self.config["codex"].get("verbosity", "high")
         cmd = [codex_bin, "exec"]
-        if self.config["codex"].get("json_events", True):
+        json_events = bool(self.config["codex"].get("json_events", True))
+        if json_events:
             cmd.append("--json")
         if self.config["codex"].get("ignore_user_config", False):
             cmd.append("--ignore-user-config")
@@ -1663,10 +1677,144 @@ class AgenticSDLC:
         if verbosity:
             cmd.extend(["-c", f"model_verbosity={verbosity}"])
         cmd.extend(["--sandbox", sandbox, "-o", str(final_file), "-"])
-        cp = run(cmd, cwd=cwd, check=False, capture=True, input_text=prompt)
-        write_text(out_file, (cp.stdout or "") + ("\n# STDERR\n" + cp.stderr if cp.stderr else ""))
-        if cp.returncode != 0:
-            raise OrchestratorError(f"Codex agent {agent} failed with exit code {cp.returncode}. See {out_file}")
+
+        heartbeat_seconds = int(self.config.get("logging", {}).get("codex_heartbeat_seconds", os.environ.get("AGENTIC_CODEX_HEARTBEAT_SECONDS", "30")))
+        preview_chars = int(self.config.get("logging", {}).get("codex_preview_chars", os.environ.get("AGENTIC_CODEX_PREVIEW_CHARS", "220")))
+        self.log(f"        Codex start: agent={agent} mode={mode} sandbox={sandbox} model={model} reasoning={reasoning_effort}")
+        self.log(f"        Codex cwd: {cwd}")
+        self.log(f"        Codex live log: {out_file}")
+        self.log(f"        Codex final: {final_file}")
+
+        def summarize_event(raw_line: str) -> str:
+            line = raw_line.strip()
+            if not line:
+                return ""
+            if json_events:
+                try:
+                    event = json.loads(line)
+                    etype = str(event.get("type") or event.get("event") or event.get("name") or "event")
+                    for key in ("message", "text", "summary", "status", "detail"):
+                        value = event.get(key)
+                        if isinstance(value, str) and value.strip():
+                            compact = re.sub(r"\s+", " ", value.strip())[:preview_chars]
+                            return f"{etype}: {compact}"
+                    if "data" in event and isinstance(event["data"], dict):
+                        for key in ("message", "text", "summary", "status"):
+                            value = event["data"].get(key)
+                            if isinstance(value, str) and value.strip():
+                                compact = re.sub(r"\s+", " ", value.strip())[:preview_chars]
+                                return f"{etype}: {compact}"
+                    return etype
+                except json.JSONDecodeError:
+                    pass
+            return re.sub(r"\s+", " ", line)[:preview_chars]
+
+        events: "queue.Queue[Tuple[str, str]]" = queue.Queue()
+        stdout_tail: List[str] = []
+        stderr_tail: List[str] = []
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(cwd),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=os.environ.copy(),
+                bufsize=1,
+            )
+        except FileNotFoundError as exc:
+            raise OrchestratorError(f"Codex executable not found while starting agent {agent}: {codex_bin}") from exc
+        except OSError as exc:
+            raise OrchestratorError(f"Could not start Codex agent {agent}: {exc}") from exc
+
+        def stream_reader(stream: Any, path: Path, kind: str) -> None:
+            try:
+                with path.open("a", encoding="utf-8") as fh:
+                    for raw in iter(stream.readline, ""):
+                        fh.write(raw)
+                        fh.flush()
+                        if kind == "stdout":
+                            summary = summarize_event(raw)
+                        else:
+                            summary = re.sub(r"\s+", " ", raw.strip())[:preview_chars]
+                        if summary:
+                            events.put((kind, summary))
+            finally:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+
+        assert proc.stdout is not None and proc.stderr is not None and proc.stdin is not None
+        stdout_thread = threading.Thread(target=stream_reader, args=(proc.stdout, out_file, "stdout"), daemon=True)
+        stderr_thread = threading.Thread(target=stream_reader, args=(proc.stderr, stderr_file, "stderr"), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
+        try:
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass
+
+        started = time.monotonic()
+        last_heartbeat = started
+        last_event = "process-started"
+        while True:
+            try:
+                kind, summary = events.get_nowait()
+                last_event = summary
+                if kind == "stdout":
+                    stdout_tail.append(summary)
+                    self.log(f"        Codex event: {agent}: {summary}")
+                else:
+                    stderr_tail.append(summary)
+                    self.log(f"        Codex stderr: {agent}: {summary}")
+            except queue.Empty:
+                pass
+            rc = proc.poll()
+            now = time.monotonic()
+            if rc is not None:
+                break
+            if now - last_heartbeat >= heartbeat_seconds:
+                elapsed = int(now - started)
+                heartbeat = {
+                    "ts": now_utc(),
+                    "agent": agent,
+                    "elapsed_seconds": elapsed,
+                    "last_event": last_event,
+                    "pid": proc.pid,
+                    "cwd": str(cwd),
+                    "log": str(out_file),
+                }
+                append_jsonl(heartbeat_file, heartbeat)
+                self.log(f"        Codex still running: agent={agent} elapsed={elapsed}s pid={proc.pid} last={last_event}")
+                last_heartbeat = now
+            time.sleep(0.2)
+
+        stdout_thread.join(timeout=2)
+        stderr_thread.join(timeout=2)
+        while True:
+            try:
+                kind, summary = events.get_nowait()
+            except queue.Empty:
+                break
+            last_event = summary
+            if kind == "stdout":
+                stdout_tail.append(summary)
+                self.log(f"        Codex event: {agent}: {summary}")
+            else:
+                stderr_tail.append(summary)
+                self.log(f"        Codex stderr: {agent}: {summary}")
+
+        elapsed = time.monotonic() - started
+        if proc.returncode != 0:
+            self.log(f"        Codex failed: agent={agent} exit={proc.returncode} elapsed={elapsed:.1f}s log={out_file}")
+            raise OrchestratorError(f"Codex agent {agent} failed with exit code {proc.returncode}. See {out_file}" + (f" and {stderr_file}" if stderr_file.exists() else ""))
+        self.log(f"        Codex done: agent={agent} exit=0 elapsed={elapsed:.1f}s log={out_file}")
 
     def write_agent_log(self, story_dir: Path, agent: str, action: str, status: str, summary: str) -> None:
         record = {
