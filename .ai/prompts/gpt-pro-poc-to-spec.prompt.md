@@ -64,6 +64,109 @@ updated_at: "YYYY-MM-DD"
 
 Set `status: ready_for_agents` only on the most granular document that should start work. Usually that is a task list.
 
+## Required sections
+
+Write these sections using the same headings. Include ID-style rows so the validator and agents can trace work.
+
+```md
+# <Feature title>
+
+## Description
+
+## Business need
+
+## User needs and scenarios
+
+| Scenario ID | Scenario | Expected outcome |
+|---|---|---|
+| US-001 | ... | ... |
+
+## Scope
+
+### In scope
+### Out of scope
+### Non-goals
+
+## Requirements
+
+| ID | Requirement | Priority | Acceptance signal | Owner agent |
+|---|---|---|---|---|
+| FR-001 | ... | must | ... | ... |
+| NFR-SEC-001 | ... | must | ... | security-engineer |
+| NFR-REL-001 | ... | should | ... | backend-engineer |
+
+## Design / UX
+
+## Architecture
+
+## Data model
+
+Write the data model, entities, fields, indexes, relationships, lifecycle, sensitivity, and test data strategy. If not applicable, write `Not applicable` and explain why.
+
+## API contract
+
+Write endpoints/events/contracts, request/response shape, errors, compatibility, auth, idempotency, and examples. If not applicable, write `Not applicable` and explain why.
+
+## AWS / cloud / infrastructure
+
+Write all cloud components and how they will be deployed. If any AWS component is needed, require Terraform. If not applicable, write `Not applicable` and explain why.
+
+## Testing strategy
+
+Include DB tests, API tests, frontend tests, integration tests, E2E tests, visual tests, accessibility tests, security tests, and local/cloud limitations as applicable.
+
+## Layer order
+
+State the exact order. Default for full-stack work: database → API/backend → frontend → QA → PM → final PR.
+
+## Programming paradigm
+
+Choose data-driven, object-oriented, event-driven, functional/procedural, or hybrid. Explain why this is the correct choice for the task.
+
+## Files and areas to touch
+
+| Path / pattern | Expected change | Owner agent | Required? |
+|---|---|---|---|
+| `...` | ... | ... | yes |
+
+## Files not to touch without approval
+
+| Path / pattern | Reason | Approval required from |
+|---|---|---|
+| `...` | ... | manager |
+
+## Agent routing
+
+| Agent | Needed? | Reason |
+|---|---|---|
+| Architecture Design Lead | yes/no | ... |
+| Database Engineer | yes/no | ... |
+| Backend Engineer | yes/no | ... |
+| Frontend Engineer | yes/no | ... |
+| QA Evidence Collector | yes | ... |
+| Product Manager Acceptance | yes | ... |
+
+## PR / task decomposition plan
+
+| PR | Responsibility | Expected files | Depends on | Target branch |
+|---|---|---|---|---|
+| PR-1 | ... | `...` | none | `dev/<feature-slug>` |
+
+## Acceptance criteria
+
+| ID | Acceptance criterion | Type | Validated by | Evidence |
+|---|---|---|---|---|
+| AC-001 | ... | functional | QA Agent | ... |
+
+## Risks and guardrails
+
+## Clarifications
+
+List known answers. If something is unknown, state whether it blocks implementation or allows safe progress.
+
+## Definition of done
+```
+
 ## Strict rules
 
 - Make design the contract before code.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Agentic SDLC Orchestrator v13
+Agentic SDLC Orchestrator v17
 
 Repo-level automation for detecting ChatGPT-created specs in local or remote branches,
 asking Codex local-mode agents to implement one-responsibility tasks, running
@@ -142,6 +142,19 @@ def safe_slug(value: str, max_len: int = 64) -> str:
     value = value.replace("/", "-")
     value = re.sub(r"-+", "-", value).strip("-._")
     return (value or "task")[:max_len]
+
+
+def compact_slug(value: str, *, prefix: str, slug_len: int = 24, hash_len: int = 8) -> str:
+    """Return a short stable filesystem-safe id.
+
+    Windows still fails in many repos when nested automation paths exceed the
+    classic MAX_PATH boundary. Internal run/task folders must therefore be
+    compact even when spec and task titles are long. Keep the human-readable
+    slug small and preserve uniqueness with a hash.
+    """
+    slug = safe_slug(value, slug_len)
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:hash_len]
+    return f"{prefix}-{digest}-{slug}"
 
 
 def branch_matches(branch: str, patterns: Iterable[str]) -> bool:
@@ -437,6 +450,8 @@ class AgenticSDLC:
                 "commit_evidence": True,
                 "retry_failed_specs": True,
                 "skip_specs_with_existing_agent_branch": True,
+                "short_internal_paths": True,
+                "max_internal_slug_len": 24,
             },
             "spec_detection": {
                 "watched_branches": ["dev/*", "spec/*", "chatgpt/*", "ai-spec/*", "feature/spec/*", "develop"],
@@ -796,7 +811,7 @@ class AgenticSDLC:
                 self.implement_spec(spec, mode=mode)
             except Exception as exc:
                 failures += 1
-                run_id = f"failed-{spec.id}-{int(time.time())}"
+                run_id = self.make_run_id(spec, prefix="fail")
                 if not self.dry_run:
                     self.mark_spec_seen(spec, status="failed", run_id=run_id)
                 print(f"ERROR processing {spec.id}: {exc}", file=sys.stderr)
@@ -824,8 +839,28 @@ class AgenticSDLC:
         if self.remote_available():
             git(self.repo, "fetch", remote, f"{branch}:refs/remotes/{remote}/{branch}", "--force", check=False)
 
+    def compact_paths_enabled(self) -> bool:
+        return bool(self.config.get("repository", {}).get("short_internal_paths", True))
+
+    def make_run_id(self, spec: SpecCandidate, prefix: str = "run") -> str:
+        if not self.compact_paths_enabled():
+            return f"{spec.id}-{int(time.time())}"
+        seed = f"{spec.branch}:{spec.path}:{spec.sha}:{int(time.time())}"
+        return compact_slug(seed, prefix=prefix, slug_len=10, hash_len=10)
+
+    def make_task_run_id(self, spec: SpecCandidate, task: AgentTask) -> str:
+        if not self.compact_paths_enabled():
+            return f"{spec.id}-{task.task_id}-{int(time.time())}"
+        seed = f"{spec.branch}:{spec.path}:{spec.sha}:{task.task_id}:{int(time.time())}"
+        return compact_slug(seed, prefix="tsk", slug_len=10, hash_len=10)
+
+    def task_dir_name(self, task: AgentTask) -> str:
+        if not self.compact_paths_enabled():
+            return task.task_id
+        return compact_slug(task.task_id, prefix="t", slug_len=int(self.config.get("repository", {}).get("max_internal_slug_len", 24)), hash_len=8)
+
     def implement_spec(self, spec: SpecCandidate, mode: str, mark_seen: bool = True) -> None:
-        run_id = f"{spec.id}-{int(time.time())}"
+        run_id = self.make_run_id(spec)
         story_dir = self.run_dir / run_id
         story_dir.mkdir(parents=True, exist_ok=True)
         write_text(story_dir / "spec.md", spec.content)
@@ -1258,8 +1293,8 @@ class AgenticSDLC:
 
     def run_task_pipeline(self, spec: SpecCandidate, task: AgentTask, story_dir: Path, mode: str) -> str:
         self.log(f"  Task {task.task_id}: {task.title} [{task.domain}/{self.task_layer(task)}]")
-        task_run_id = f"{spec.id}-{task.task_id}-{int(time.time())}"
-        task_dir = story_dir / "tasks" / task.task_id
+        task_run_id = self.make_task_run_id(spec, task)
+        task_dir = story_dir / "tasks" / self.task_dir_name(task)
         task_dir.mkdir(parents=True, exist_ok=True)
         write_json(task_dir / "task.json", task.__dict__)
         if self.push_tasks_to_source_spec_branch() and self.task_completed_in_source_branch(spec, task):
@@ -1600,7 +1635,7 @@ class AgenticSDLC:
     def collect_evidence(self, spec: SpecCandidate, task: AgentTask, story_dir: Path, task_dir: Path, worktree: Path) -> None:
         rel = Path(self.config["repository"].get("evidence_dir", "docs/agentic-evidence")) / spec.id / task.task_id
         # Dry-run must not dirty the repository; write preview evidence under .agent/runs only.
-        target = (task_dir / "evidence-preview" / spec.id / task.task_id) if self.dry_run else (worktree / rel)
+        target = (task_dir / "ev") if self.dry_run else (worktree / rel)
         target.mkdir(parents=True, exist_ok=True)
         # Copy story log.
         if (story_dir / "agents.log.md").exists():
@@ -1804,7 +1839,7 @@ Revert this PR. No production deployment should occur without release gate appro
             return True
         default_base = str(cfg.get("default_base_branch") or self.config["repository"].get("default_base_branch", "main"))
         current_branch = git_output_or_empty(worktree, "rev-parse", "--abbrev-ref", "HEAD")
-        report_dir = task_dir / "branch-conflict"
+        report_dir = task_dir / "bc"
         report_dir.mkdir(parents=True, exist_ok=True)
         cmd = [
             sys.executable, str(script), "guard",
@@ -1812,10 +1847,13 @@ Revert this PR. No production deployment should occur without release gate appro
             "--base", default_base,
             "--current-diff-base", spec.branch,
             "--exclude-branch", spec.branch,
-            "--exclude-branch", current_branch,
+        ]
+        if current_branch and current_branch != spec.branch:
+            cmd.extend(["--exclude-branch", current_branch])
+        cmd.extend([
             "--json-output", str(report_dir / f"{phase}.json"),
             "--markdown-output", str(report_dir / f"{phase}.md"),
-        ]
+        ])
         for pattern in cfg.get("ignore_patterns", []):
             cmd.extend(["--ignore-pattern", str(pattern)])
         expected_paths = list(task.expected_paths or [])
@@ -2302,7 +2340,7 @@ Review / Approve / Request changes / Decide tradeoff
         try:
             self.implement_spec(spec, mode=mode, mark_seen=True)
         except Exception as exc:
-            run_id = f"failed-{spec.id}-{int(time.time())}"
+            run_id = self.make_run_id(spec, prefix="fail")
             if not self.dry_run:
                 self.mark_spec_seen(spec, status="failed", run_id=run_id)
             print(f"ERROR processing {spec.id}: {exc}", file=sys.stderr)
