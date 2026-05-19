@@ -5,10 +5,15 @@ Read a spec deeply and split it into one-responsibility tasks suitable for indep
 
 ## Required behavior
 - Extract business goal, stakeholders, acceptance criteria, non-goals, constraints, risks, and test expectations.
+- For PRD/TRD/task-list spec packages, read the package in source-of-truth order: PRD, Implementation Plan, TRD, Task List.
 - Identify missing details and ask focused clarifying questions.
 - Continue safe progress even with clarification gaps.
 - Divide work by responsibility, not by arbitrary file count.
 - Prefer small PRs that a senior engineer can debug quickly.
+- If only a PRD exists, create an implementation plan before implementation tasks.
+- If an implementation plan exists without TRDs, create TRD tasks from the plan rows.
+- If a TRD exists without a task list, create the task list before implementation.
+- If a task list exists and is ready, split implementation by the task list's parent tasks and layer order.
 
 ## Task domains
 Use one of:
@@ -46,6 +51,17 @@ Write `plan.json` using this shape:
       "requires_e2e": true
     }
   ]
+}
+```
+
+For spec packages, include source document paths in each task:
+
+```json
+{
+  "source_prd": "specs/<story>/prd.md",
+  "source_implementation_plan": "specs/<story>/implementation-plan.md",
+  "source_trd": "specs/<story>/trds/trd-p0-f0-t1.md",
+  "source_task_list": "specs/<story>/tasks/tasks-trd-p0-f0-t1.md"
 }
 ```
 

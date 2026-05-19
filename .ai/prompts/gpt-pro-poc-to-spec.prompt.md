@@ -2,16 +2,30 @@
 
 You are helping an AI PM turn a stakeholder/boss POC into an implementation-ready spec for an autonomous Codex agent team.
 
-Create a Markdown spec file that can be saved as:
+Create a PRD/TRD package, not a vague single-file spec. Save it as:
 
 ```text
-specs/<feature-slug>.spec.md
+specs/<feature-slug>/prd.md
+specs/<feature-slug>/implementation-plan.md
+specs/<feature-slug>/trds/trd-<task-id>-<short-slug>.md
+specs/<feature-slug>/tasks/tasks-trd-<task-id>-<short-slug>.md
 ```
 
 The spec must be complete enough that Codex agents can implement without guessing. It must pass:
 
 ```bash
-python .ai/scripts/validate_agentic_spec.py specs/<feature-slug>.spec.md
+python .ai/scripts/validate_agentic_spec.py specs/<feature-slug>/prd.md specs/<feature-slug>/implementation-plan.md specs/<feature-slug>/trds/trd-<task-id>-<short-slug>.md specs/<feature-slug>/tasks/tasks-trd-<task-id>-<short-slug>.md
+```
+
+## Templates to follow
+
+Use these templates exactly as structure guides:
+
+```text
+specs/_TEMPLATE.prd.md
+specs/_TEMPLATE.implementation-plan.md
+specs/_TEMPLATE.trd.md
+specs/_TEMPLATE.task-list.md
 ```
 
 ## Required front matter
@@ -21,10 +35,10 @@ Use this exact front matter shape and fill every value. Do not leave placeholder
 ```yaml
 ---
 spec_id: SPEC-YYYYMMDD-<feature-slug>
-spec_version: "1.0"
 story_id: STORY-<feature-slug>
 title: "<feature title>"
-status: ready_for_agents
+status: draft
+doc_type: prd | implementation_plan | trd | task_list
 priority: medium
 risk_level: medium
 owner: "@juanesriosg"
@@ -41,108 +55,14 @@ updated_at: "YYYY-MM-DD"
 ---
 ```
 
-## Required sections
+## Required package documents
 
-Write these sections using the same headings. Include ID-style rows so the validator and agents can trace work.
+1. `prd.md`: product vision, users, use cases, functional requirements, acceptance criteria, architecture/data, product rules, open questions, assumptions, blocked items, and change log.
+2. `implementation-plan.md`: short PRD understanding, questions, current execution priority, phase tables with task IDs, dependencies, deliverables, and traceability.
+3. `trds/trd-*.md`: one task-level implementation contract per implementation-plan task or tight task cluster.
+4. `tasks/tasks-trd-*.md`: executable task list with relevant files, acceptance coverage, sub-tasks, validation, and evidence.
 
-```md
-# <Feature title>
-
-## Description
-
-## Business need
-
-## User needs and scenarios
-
-| Scenario ID | Scenario | Expected outcome |
-|---|---|---|
-| US-001 | ... | ... |
-
-## Scope
-
-### In scope
-### Out of scope
-### Non-goals
-
-## Requirements
-
-| ID | Requirement | Priority | Acceptance signal | Owner agent |
-|---|---|---|---|---|
-| FR-001 | ... | must | ... | ... |
-| NFR-SEC-001 | ... | must | ... | security-engineer |
-| NFR-REL-001 | ... | should | ... | backend-engineer |
-
-## Design / UX
-
-## Architecture
-
-## Data model
-
-Write the data model, entities, fields, indexes, relationships, lifecycle, sensitivity, and test data strategy. If not applicable, write `Not applicable` and explain why.
-
-## API contract
-
-Write endpoints/events/contracts, request/response shape, errors, compatibility, auth, idempotency, and examples. If not applicable, write `Not applicable` and explain why.
-
-## AWS / cloud / infrastructure
-
-Write all cloud components and how they will be deployed. If any AWS component is needed, require Terraform. If not applicable, write `Not applicable` and explain why.
-
-## Testing strategy
-
-Include DB tests, API tests, frontend tests, integration tests, E2E tests, visual tests, accessibility tests, security tests, and local/cloud limitations as applicable.
-
-## Layer order
-
-State the exact order. Default for full-stack work: database → API/backend → frontend → QA → PM → final PR.
-
-## Programming paradigm
-
-Choose data-driven, object-oriented, event-driven, functional/procedural, or hybrid. Explain why this is the correct choice for the task.
-
-## Files and areas to touch
-
-| Path / pattern | Expected change | Owner agent | Required? |
-|---|---|---|---|
-| `...` | ... | ... | yes |
-
-## Files not to touch without approval
-
-| Path / pattern | Reason | Approval required from |
-|---|---|---|
-| `...` | ... | manager |
-
-## Agent routing
-
-| Agent | Needed? | Reason |
-|---|---|---|
-| Architecture Design Lead | yes/no | ... |
-| Database Engineer | yes/no | ... |
-| Backend Engineer | yes/no | ... |
-| Frontend Engineer | yes/no | ... |
-| QA Evidence Collector | yes | ... |
-| Product Manager Acceptance | yes | ... |
-
-## PR / task decomposition plan
-
-| PR | Responsibility | Expected files | Depends on | Target branch |
-|---|---|---|---|---|
-| PR-1 | ... | `...` | none | `dev/<feature-slug>` |
-
-## Acceptance criteria
-
-| ID | Acceptance criterion | Type | Validated by | Evidence |
-|---|---|---|---|---|
-| AC-001 | ... | functional | QA Agent | ... |
-
-## Risks and guardrails
-
-## Clarifications
-
-List known answers. If something is unknown, state whether it blocks implementation or allows safe progress.
-
-## Definition of done
-```
+Set `status: ready_for_agents` only on the most granular document that should start work. Usually that is a task list.
 
 ## Strict rules
 

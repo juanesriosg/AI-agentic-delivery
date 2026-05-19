@@ -1,0 +1,18 @@
+{
+  "schema": "agentic.feedback_bundle.v1",
+  "captured_at": "2026-05-19",
+  "source": "manager_request",
+  "summary": "Specs in this repo are too vague; use the PRD, TRD, task-list, and implementation-plan structure from cobalto-agile and real-estate-v2.",
+  "rationale": "The current single-file spec template does not force product source-of-truth, technical planning, task-level contracts, and executable implementation checklists to be separated and traceable.",
+  "target_files": [
+    "specs/_TEMPLATE.prd.md",
+    "specs/_TEMPLATE.implementation-plan.md",
+    "specs/_TEMPLATE.trd.md",
+    "specs/_TEMPLATE.task-list.md",
+    ".ai/skills/create-prd.skill.md",
+    ".ai/skills/create-implementation-plan.skill.md",
+    ".ai/skills/create-trd.skill.md",
+    ".ai/skills/create-task-list.skill.md"
+  ],
+  "accepted": true
+}

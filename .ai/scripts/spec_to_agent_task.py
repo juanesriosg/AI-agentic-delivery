@@ -10,6 +10,13 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+DOC_TYPE_SIGNALS = {
+    "prd": ["prd master", "product requirements", "product vision", "personas", "use cases", "product rules"],
+    "implementation_plan": ["implementation plan by phases", "short prd understanding", "task id", "deliverable"],
+    "trd": ["task requirements document", "functional requirements (task-level)", "context & links"],
+    "task_list": ["task list", "relevant files", "acceptance criteria coverage", "- [ ]"],
+}
+
 
 def read_text(path: Path) -> str:
     try:
@@ -47,6 +54,23 @@ def parse_front_matter(text: str) -> Dict[str, str]:
             value = value.split(" #", 1)[0].strip()
         data[key.strip()] = clean_value(value)
     return data
+
+
+def infer_doc_type(path: Path, text: str, front: Dict[str, str]) -> str:
+    explicit = clean_value(front.get("doc_type", ""))
+    normalized = re.sub(r"[^a-z0-9]+", "_", explicit.lower()).strip("_")
+    if normalized in DOC_TYPE_SIGNALS:
+        return normalized
+    name = path.name.lower()
+    text_l = text.lower()
+    if name.startswith("tasks-") or "task list" in name:
+        return "task_list"
+    scores = {
+        doc_type: sum(1 for signal in signals if signal in text_l)
+        for doc_type, signals in DOC_TYPE_SIGNALS.items()
+    }
+    doc_type, score = max(scores.items(), key=lambda item: item[1])
+    return doc_type if score >= 2 else "agentic"
 
 
 def is_template_spec_path(path: Path | str) -> bool:
@@ -154,6 +178,64 @@ def extract_acceptance_criteria(text: str) -> List[str]:
     return acs
 
 
+def resolve_related_path(spec_path: Path, value: str) -> str:
+    value = clean_value(value)
+    if not value:
+        return ""
+    raw = Path(value)
+    candidates = [raw]
+    if not raw.is_absolute():
+        candidates.insert(0, spec_path.parent / raw)
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return value
+
+
+def discover_spec_package_docs(spec_path: Path, text: str, front: Dict[str, str]) -> List[str]:
+    related: List[str] = [str(spec_path)]
+    for key in ("source_prd", "source_implementation_plan", "source_trd", "source_task_list"):
+        resolved = resolve_related_path(spec_path, front.get(key, ""))
+        if resolved:
+            related.append(resolved)
+    package_dir = spec_path.parent
+    if package_dir.name in {"trds", "tasks"}:
+        package_dir = package_dir.parent
+    for rel in ("prd.md", "implementation-plan.md"):
+        candidate = package_dir / rel
+        if candidate.exists():
+            related.append(str(candidate))
+    if spec_path.parent.name == "tasks":
+        trd_dir = package_dir / "trds"
+        if trd_dir.exists():
+            task_id = front.get("task_id", "")
+            for candidate in sorted(trd_dir.glob("trd-*.md")):
+                if not task_id or task_id.lower() in candidate.name.lower():
+                    related.append(str(candidate))
+    seen = set()
+    unique: List[str] = []
+    for item in related:
+        normalized = str(Path(item))
+        if normalized not in seen:
+            seen.add(normalized)
+            unique.append(normalized)
+    return unique
+
+
+def acceptance_from_related(spec_path: Path, text: str, front: Dict[str, str]) -> List[str]:
+    acs = extract_acceptance_criteria(text)
+    if acs:
+        return acs
+    for item in discover_spec_package_docs(spec_path, text, front):
+        path = Path(item)
+        if path == spec_path or not path.exists():
+            continue
+        acs = extract_acceptance_criteria(read_text(path))
+        if acs:
+            return acs
+    return []
+
+
 def spec_id_from(text: str, spec_path: str) -> str:
     explicit = extract_field(text, "Spec ID") or extract_field(text, "spec_id") or extract_yaml_scalar(text, "id")
     if explicit and not explicit.lower().startswith("<"):
@@ -168,8 +250,10 @@ def render_payload(spec_path: Path, branch: str, sha: str, repo: str) -> Dict[st
     title = front.get("title") or extract_title(text, str(spec_path))
     spec_id = front.get("spec_id") or spec_id_from(text, str(spec_path))
     status = front.get("status", "")
+    doc_type = infer_doc_type(spec_path, text, front)
     slug = slugify(title)
     implementation_branch = f"ai/{slugify(spec_id, 24)}-{slug}"
+    related_docs = discover_spec_package_docs(spec_path, text, front)
     return {
         "event_type": "ai_spec_ready",
         "repository": repo,
@@ -178,13 +262,16 @@ def render_payload(spec_path: Path, branch: str, sha: str, repo: str) -> Dict[st
         "spec_path": str(spec_path),
         "title": title,
         "spec_id": spec_id,
+        "doc_type": doc_type,
         "spec_status": status,
+        "task_id": front.get("task_id", ""),
+        "related_spec_documents": related_docs,
         "implementation_branch": implementation_branch,
         "pr_target_branch": branch,
         "autonomy": extract_field(text, "Autonomy level") or extract_field(text, "Autonomy") or "L3",
         "risk": extract_field(text, "Risk level") or extract_field(text, "Risk") or "unknown",
         "owner": extract_field(text, "Product owner / AI PM") or extract_field(text, "Owner") or "manager/repo-owner",
-        "acceptance_criteria": extract_acceptance_criteria(text),
+        "acceptance_criteria": acceptance_from_related(spec_path, text, front),
         "required_agent": "mid-software-engineer",
     }
 
@@ -192,6 +279,8 @@ def render_payload(spec_path: Path, branch: str, sha: str, repo: str) -> Dict[st
 def render_markdown(payload: Dict[str, Any]) -> str:
     acs = payload.get("acceptance_criteria") or []
     ac_block = "\n".join(f"- {ac}" for ac in acs) if acs else "- No acceptance criteria detected; ask clarification before risky implementation."
+    related_docs = payload.get("related_spec_documents") or [payload["spec_path"]]
+    related_block = "\n".join(f"- `{doc}`" for doc in related_docs)
     return f"""
 # AI Implementation Task from Spec: {payload['title']}
 
@@ -199,6 +288,8 @@ Status: `ai:ready`
 Source spec branch: `{payload['source_spec_branch']}`
 Source commit SHA: `{payload['source_commit_sha']}`
 Spec path: `{payload['spec_path']}`
+Spec document type: `{payload.get('doc_type', 'agentic')}`
+Task ID: `{payload.get('task_id') or 'not specified'}`
 Implementation branch: `{payload['implementation_branch']}`
 PR target branch: `{payload['pr_target_branch']}`
 Autonomy: `{payload['autonomy']}`
@@ -212,13 +303,14 @@ Implement the spec pushed to the source branch. Work like a mid-level software e
 ## Required files to read first
 
 - `AGENTS.md`
+- `.ai/specs/spec-package-convention.md`
 - `.ai/specs/branch-spec-ingestion.yml`
 - `.ai/specs/spec-file-convention.md`
 - `.ai/specs/spec-implementation-pipeline.md`
 - `.ai/specs/testing-lifecycle.yml`
 - `.ai/specs/quality-rubric.yml`
 - `.ai/specs/deployment-gates.yml`
-- `{payload['spec_path']}`
+{related_block}
 
 ## Acceptance criteria detected
 

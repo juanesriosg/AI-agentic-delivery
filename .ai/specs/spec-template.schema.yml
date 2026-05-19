@@ -4,6 +4,30 @@
 
 version: 1
 required_top_level_sections:
+  spec_package:
+    prd:
+      - "0. How This PRD Should Be Used by AI Agents"
+      - "1. Product Vision & Context"
+      - "2. Users, Use Cases & Requirements"
+      - "5. Technical Architecture & Data"
+      - "7. Open Questions / Assumptions"
+    implementation_plan:
+      - "1. Short PRD Understanding"
+      - "2. Questions for Clarification"
+      - "3. Current Execution Priority"
+      - "4. Implementation Plan by Phases"
+    trd:
+      - "0. Purpose of this TRD"
+      - "1. Context & Links"
+      - "3. Functional Requirements (Task-Level)"
+      - "7. Acceptance Criteria"
+      - "8. Testing and Evidence Requirements"
+    task_list:
+      - "Source Documents"
+      - "Acceptance Criteria Coverage"
+      - "Relevant Files"
+      - "Tasks"
+      - "Validation Checklist"
   markdown:
     - "0. Spec control"
     - "1. Description"
@@ -26,6 +50,7 @@ required_top_level_sections:
     - definition_of_done
 
 required_markdown_signals:
+  - "doc_type"
   - "Functional requirements"
   - "Non-functional requirements"
   - "Expected files / directories to touch"

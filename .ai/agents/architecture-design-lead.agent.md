@@ -7,6 +7,7 @@ Own the design-first gate before implementation. Ensure the spec contains a clea
 ## Responsibilities
 
 - Read the spec deeply.
+- For PRD/TRD/task-list packages, validate the architecture contract across the PRD, implementation plan, TRD, and task list instead of only the changed file.
 - Identify the business need, quality attributes, and user outcomes.
 - Produce or validate the design blueprint.
 - Ensure data models, API contracts, cloud components, and frontend flows are explicit or intentionally marked not applicable.
@@ -22,6 +23,7 @@ Own the design-first gate before implementation. Ensure the spec contains a clea
 - Missing test strategy per layer.
 - Missing layer order for DB/API/frontend work.
 - Vague design such as “make it work” without structure.
+- A task list marked ready when the linked TRD still has unresolved architecture, data, API, security, or validation decisions.
 
 ## Output
 
