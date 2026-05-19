@@ -24,7 +24,7 @@ import sys
 import textwrap
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 ROOT_MARKERS = [".git"]
@@ -88,6 +88,8 @@ def run(
             cwd=str(cwd) if cwd else None,
             check=check,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             input=input_text,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.PIPE if capture else None,
@@ -100,10 +102,57 @@ def run(
         if exc.stderr:
             msg.append("STDERR:\n" + exc.stderr)
         raise OrchestratorError("\n".join(msg)) from exc
+    except FileNotFoundError as exc:
+        raise OrchestratorError(
+            "Executable not found while running command: "
+            + " ".join(str(part) for part in cmd)
+            + (f"\ncwd: {cwd}" if cwd else "")
+        ) from exc
+    except OSError as exc:
+        raise OrchestratorError(
+            "Could not start command: "
+            + " ".join(str(part) for part in cmd)
+            + (f"\ncwd: {cwd}" if cwd else "")
+            + f"\n{exc}"
+        ) from exc
 
 
 def which(binary: str) -> Optional[str]:
     return shutil.which(binary)
+
+
+def resolve_executable(binary: str, *, prefer_cmd_on_windows: bool = False) -> Optional[str]:
+    """Resolve a command to a CreateProcess-safe executable path.
+
+    npm installs both PowerShell and cmd shims on Windows. PowerShell can run
+    `codex.ps1` interactively, but Python subprocess with shell=False needs a
+    directly executable file, so prefer `codex.cmd` for Windows agent runs.
+    """
+    if os.name == "nt" and prefer_cmd_on_windows:
+        path = PurePath(binary)
+        if path.suffix.lower() == ".ps1":
+            cmd_path = str(path.with_suffix(".cmd"))
+            if os.path.exists(cmd_path):
+                return cmd_path
+            cmd_path = re.sub(r"(?i)\.ps1$", ".cmd", binary)
+            if os.path.exists(cmd_path):
+                return cmd_path
+        if not path.suffix:
+            for candidate in (f"{binary}.cmd", f"{binary}.exe", f"{binary}.bat"):
+                found = shutil.which(candidate)
+                if found:
+                    return found
+    found = shutil.which(binary)
+    if os.name == "nt" and prefer_cmd_on_windows and found:
+        found_path = PurePath(found)
+        if found_path.suffix.lower() == ".ps1":
+            cmd_path = str(found_path.with_suffix(".cmd"))
+            if os.path.exists(cmd_path):
+                return cmd_path
+            cmd_path = re.sub(r"(?i)\.ps1$", ".cmd", found)
+            if os.path.exists(cmd_path):
+                return cmd_path
+    return found
 
 
 def repo_root(start: Optional[Path] = None) -> Path:
@@ -543,7 +592,7 @@ class AgenticSDLC:
         checks = []
         checks.append(("git", which("git") is not None))
         checks.append(("gh", which("gh") is not None))
-        checks.append(("codex", which(self.config["codex"].get("binary", "codex")) is not None))
+        checks.append(("codex", resolve_executable(str(self.config["codex"].get("binary", "codex")), prefer_cmd_on_windows=True) is not None))
         checks.append(("repo", (self.repo / ".git").exists()))
         checks.append(("config", self.config_path.exists()))
         try:
@@ -1578,7 +1627,8 @@ class AgenticSDLC:
 
     def call_codex(self, prompt: str, cwd: Path, run_dir: Path, agent: str, mode: str, allow_write: bool) -> None:
         run_dir.mkdir(parents=True, exist_ok=True)
-        codex_bin = self.config["codex"].get("binary", "codex")
+        configured_codex_bin = self.config["codex"].get("binary", "codex")
+        codex_bin = resolve_executable(str(configured_codex_bin), prefer_cmd_on_windows=True)
         prompt_hash = short_sha(prompt, 10)
         out_file = run_dir / "codex" / f"{agent}-{prompt_hash}.jsonl"
         final_file = run_dir / "codex" / f"{agent}-{prompt_hash}.final.md"
@@ -1586,12 +1636,12 @@ class AgenticSDLC:
         if self.dry_run:
             write_text(final_file, f"DRY-RUN: would run {agent} in {cwd}\n")
             return
-        if which(codex_bin) is None:
+        if codex_bin is None:
             write_text(final_file, f"Codex binary not found. Prompt saved for manual/local execution.\n")
             write_text(run_dir / "prompts_missing_codex" / f"{agent}-{prompt_hash}.md", prompt)
             if self.dry_run or bool(self.config["codex"].get("allow_missing_codex", False)):
                 return
-            raise OrchestratorError(f"Codex binary not found: {codex_bin}. Install Codex CLI, run with --dry-run, or set codex.allow_missing_codex=true only for prompt-generation workflows.")
+            raise OrchestratorError(f"Codex binary not found: {configured_codex_bin}. Install Codex CLI, run with --dry-run, or set codex.allow_missing_codex=true only for prompt-generation workflows.")
         sandbox = self.config["codex"].get("sandbox", "workspace-write") if allow_write else "read-only"
         model_env = self.config["codex"].get("model_env_var", "AGENTIC_CODEX_MODEL")
         reasoning_env = self.config["codex"].get("reasoning_effort_env_var", "AGENTIC_CODEX_REASONING_EFFORT")
@@ -1887,8 +1937,8 @@ Revert this PR. No production deployment should occur without release gate appro
 
     def run_guardrails(self, worktree: Path, spec: SpecCandidate, task: AgentTask, story_dir: Path, task_dir: Path, mode: str) -> None:
         scripts = [
-            worktree / ".ai/scripts/pr_guardrails.py",
-            worktree / ".ai/scripts/aws_terraform_guardrails.py",
+            self.repo / ".ai/scripts/pr_guardrails.py",
+            self.repo / ".ai/scripts/aws_terraform_guardrails.py",
         ]
         for script in scripts:
             if script.exists():
@@ -1900,7 +1950,14 @@ Revert this PR. No production deployment should occur without release gate appro
                 if self.dry_run:
                     self.log(f"    DRY-RUN would run {' '.join(cmd)}")
                 else:
-                    cp = run(cmd, cwd=worktree, check=False, capture=True)
+                    env = {}
+                    if script.name == "pr_guardrails.py" and self.push_tasks_to_source_spec_branch():
+                        # Source-spec-branch mode commits validated evidence and
+                        # task markers back to the integration branch; the final
+                        # PR is the review object, so evidence-only task commits
+                        # are allowed while normal task-branch PRs still block them.
+                        env["AGENT_ALLOW_EVIDENCE_ONLY"] = "true"
+                    cp = run(cmd, cwd=worktree, check=False, capture=True, env=env)
                     write_text(task_dir / f"{script.stem}.out", (cp.stdout or "") + (cp.stderr or ""))
                     if cp.returncode != 0:
                         raise OrchestratorError(f"Guardrail failed: {script.name}. See {task_dir / (script.stem + '.out')}")
