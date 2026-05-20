@@ -454,7 +454,11 @@ def git_changed_paths(repo: Path) -> List[str]:
     return [path for path in paths if not is_runtime_or_generated_path(path)]
 
 
-def git_add_changed_paths(repo: Path, scopes: Optional[Iterable[str]] = None) -> List[str]:
+def git_add_changed_paths(
+    repo: Path,
+    scopes: Optional[Iterable[str]] = None,
+    exclude_paths: Optional[Iterable[str]] = None,
+) -> List[str]:
     """Stage filtered changed paths without using ignored pathspec excludes.
 
     `git add -A -- . :(exclude).agent/**` still fails on some Git/Windows
@@ -465,6 +469,9 @@ def git_add_changed_paths(repo: Path, scopes: Optional[Iterable[str]] = None) ->
     paths = git_changed_paths(repo)
     if scopes:
         paths = [path for path in paths if path_within_scopes(path, scopes)]
+    if exclude_paths:
+        excluded = {str(path).replace("\\", "/").strip("/") for path in exclude_paths if str(path).strip()}
+        paths = [path for path in paths if path.replace("\\", "/").strip("/") not in excluded]
     if not paths:
         return []
     chunk_size = 100
@@ -558,6 +565,7 @@ class AgenticSDLC:
         self.evidence_dir = repo / self.config["repository"].get("evidence_dir", "docs/agentic-evidence")
         self.registry_path = self.state_dir / "spec_registry.json"
         self.registry = read_json(self.registry_path, {"seen": {}, "runs": []})
+        self.task_preexisting_changed_paths: Dict[Tuple[str, str], set[str]] = {}
 
     def load_config(self) -> Dict[str, Any]:
         default = {
@@ -1858,6 +1866,8 @@ class AgenticSDLC:
             self.log(f"    Layer dependency blocked task {task.task_id}; watcher will retry after previous layer PR is merged/passed.")
             return "blocked"
         worktree = self.prepare_worktree(spec, task, task_run_id)
+        if self.run_tasks_in_current_worktree() and not self.dry_run:
+            self.task_preexisting_changed_paths[(spec.id, task.task_id)] = set(git_changed_paths(worktree))
         self.write_agent_log(story_dir, "orchestrator", "task_started", "started", f"{task.task_id} in {worktree}")
         try:
             if self.run_branch_conflict_check(worktree, spec, task, story_dir, task_dir, phase="preflight"):
@@ -2709,6 +2719,10 @@ Revert this PR. No production deployment should occur without release gate appro
         spec_path = spec.path.replace("\\", "/").strip("/")
         return [path for path in self.task_change_scopes(spec, task) if path != spec_path]
 
+    def preexisting_task_changes(self, spec: SpecCandidate, task: AgentTask) -> set[str]:
+        """Changed paths that existed before this current-worktree task began."""
+        return set(getattr(self, "task_preexisting_changed_paths", {}).get((spec.id, task.task_id), set()))
+
     def task_completed_in_source_branch(self, spec: SpecCandidate, task: AgentTask) -> bool:
         """Return true when a previous run committed the task completion marker.
 
@@ -2878,7 +2892,7 @@ This marker allows the POC-to-PR workflow to continue on later pushes without re
                     "Current-worktree task commits require an empty Git index before staging. "
                     "Commit, unstage, or stash existing staged files first."
                 )
-        git_add_changed_paths(worktree, scopes=scopes)
+        git_add_changed_paths(worktree, scopes=scopes, exclude_paths=self.preexisting_task_changes(spec, task) if scopes else None)
         staged = git(worktree, "diff", "--cached", "--name-only")
         if not staged.strip():
             self.write_agent_log(story_dir, "orchestrator", "nothing_staged", "completed", f"No commit for {task.task_id}; runtime artifacts were excluded")
@@ -2994,7 +3008,7 @@ Codex review is required before human approval. The PR should receive an automat
                     "Current-worktree task PR creation requires an empty Git index before staging. "
                     "Commit, unstage, or stash existing staged files first."
                 )
-        git_add_changed_paths(worktree, scopes=scopes)
+        git_add_changed_paths(worktree, scopes=scopes, exclude_paths=self.preexisting_task_changes(spec, task) if scopes else None)
         staged = git(worktree, "diff", "--cached", "--name-only")
         if not staged.strip():
             self.write_agent_log(story_dir, "orchestrator", "nothing_staged", "completed", f"No PR for {task.task_id}; runtime artifacts were excluded")

@@ -118,6 +118,32 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
             self.assertEqual(staged, ["task/owned.txt"])
             self.assertEqual(cached, ["task/owned.txt"])
 
+    def test_git_add_changed_paths_can_skip_preexisting_task_scope_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(["git", "config", "user.email", "agent@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Agent"], cwd=repo, check=True)
+            (repo / "task").mkdir()
+            (repo / "task" / "preexisting.txt").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "task/preexisting.txt"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            (repo / "task" / "preexisting.txt").write_text("local dirty\n", encoding="utf-8")
+            (repo / "task" / "new.txt").write_text("new\n", encoding="utf-8")
+
+            staged = agentic_sdlc.git_add_changed_paths(repo, scopes=["task"], exclude_paths=["task/preexisting.txt"])
+            cached = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                cwd=repo,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.splitlines()
+
+            self.assertEqual(staged, ["task/new.txt"])
+            self.assertEqual(cached, ["task/new.txt"])
+
     def test_current_worktree_mode_can_be_enabled_by_config_or_env(self) -> None:
         orchestrator = make_orchestrator()
 
