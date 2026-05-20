@@ -79,7 +79,7 @@ This task does not create or modify AWS resources, Terraform, deployment workflo
 - API: unit/contract/integration tests against a test database.
 - Frontend: component tests and real API/E2E validation when local tooling supports it.
 - Visual/accessibility: screenshots or an exact environment blocker.
-- QA/PM: evidence files under `docs/agentic-evidence/<spec-id>/<task-id>/`.
+- QA/PM: evidence files under `docs/agentic-evidence/SPEC-20260520-crud-pipeline-smoke/P0-F1-T1-DB/`, `docs/agentic-evidence/SPEC-20260520-crud-pipeline-smoke/P0-F1-T2-API/`, `docs/agentic-evidence/SPEC-20260520-crud-pipeline-smoke/P0-F1-T3-UI/`, and `docs/agentic-evidence/SPEC-20260520-crud-pipeline-smoke/P0-F1-T4-QA/`.
 
 ## Layer Order
 
