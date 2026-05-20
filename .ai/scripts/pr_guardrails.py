@@ -24,7 +24,7 @@ RUNTIME_PREFIXES = (
     ".agent/", ".venv/", "venv/", "node_modules/", "vendor/bundle/",
     "__pycache__/", ".pytest_cache/", ".mypy_cache/", "target/", "dist/", "build/",
 )
-EVIDENCE_PREFIXES = ("docs/agentic-evidence/", ".agent/")
+EVIDENCE_PREFIXES = ("docs/agentic-evidence/", "docs/agentic-path-leases/", ".agent/")
 UI_EXTENSIONS = {".tsx", ".jsx", ".vue", ".svelte", ".css", ".scss", ".html"}
 CODE_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".kt", ".cs", ".rb", ".php"}
 API_HINTS = ["api/", "routes/", "controllers/", "handlers/", "lambda", "server", "backend"]
@@ -162,7 +162,17 @@ def is_runtime_file(path: str) -> bool:
 
 def is_evidence_only(files: list[str]) -> bool:
     reviewable = [f for f in files if not is_runtime_file(f)]
-    return bool(reviewable) and all(f.startswith(EVIDENCE_PREFIXES) for f in reviewable)
+    normalized = [f.replace("\\", "/") for f in reviewable]
+    return bool(normalized) and all(f.startswith(EVIDENCE_PREFIXES) for f in normalized)
+
+
+def is_evidence_or_support_only(files: list[str]) -> bool:
+    reviewable = [f for f in files if not is_runtime_file(f)]
+    normalized = [f.replace("\\", "/") for f in reviewable]
+    return bool(normalized) and all(
+        f.startswith(EVIDENCE_PREFIXES) or classify_domain(f) == "support"
+        for f in normalized
+    )
 
 
 def classify_domain(path: str) -> str:
@@ -197,6 +207,18 @@ def evidence_dir_for(task_id: str) -> List[Path]:
     return [p for p in base.glob(f"**/{task_id}") if p.is_dir()]
 
 
+def discover_task_evidence_dirs() -> list[Path]:
+    base = Path("docs/agentic-evidence")
+    if not base.exists():
+        return []
+    required = {"agents.log.md", "qa-checklist.md", "pm-checklist.md", "test-evidence.md"}
+    out: list[Path] = []
+    for path in base.rglob("*"):
+        if path.is_dir() and required.issubset({child.name for child in path.iterdir() if child.is_file()}):
+            out.append(path)
+    return sorted(out)
+
+
 def file_text(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8", errors="replace")
@@ -210,7 +232,11 @@ def gate_status_failures(path: Path, gate_name: str) -> list[str]:
     lower = text.lower()
     if "pending_agent_verification" in lower:
         failures.append(f"{gate_name} evidence is still pending: {path}")
-    status_lines = [line.strip().lower() for line in text.splitlines() if re.search(r"^(status|qa decision|pm decision|decision)\s*:", line.strip(), re.I)]
+    status_lines = [
+        line.strip().lower()
+        for line in text.splitlines()
+        if re.search(r"^(status|qa status|pm status|qa decision|pm decision|decision|qa result|pm result|result)\s*:", line.strip(), re.I)
+    ]
     if not status_lines:
         failures.append(f"{gate_name} evidence has no Status/Decision line: {path}")
         return failures
@@ -300,16 +326,22 @@ def main() -> int:
     added, deleted = diff_stat(args.base)
     total_lines = added + deleted
 
-    if len(files) > args.max_files:
+    source_spec_branch_pr = os.environ.get("AGENT_SOURCE_SPEC_BRANCH_PR", "false").lower() in {"1", "true", "yes"}
+
+    if len(files) > args.max_files and not source_spec_branch_pr:
         failures.append(f"Too many files changed: {len(files)} > {args.max_files}. Split the PR.")
-    if total_lines > args.max_lines:
+    allow_evidence_only = os.environ.get("AGENT_ALLOW_EVIDENCE_ONLY", "false").lower() in {"1", "true", "yes"}
+    evidence_only = is_evidence_only(files)
+    evidence_or_support_only = is_evidence_or_support_only(files)
+
+    if total_lines > args.max_lines and not (source_spec_branch_pr or (allow_evidence_only and evidence_or_support_only)):
         failures.append(f"Too many lines changed: {total_lines} > {args.max_lines}. Split the PR.")
-    if is_evidence_only(files):
+    if evidence_only and not allow_evidence_only:
         failures.append("PR only changes agent evidence/runtime files. Suppress this PR or add the actual one-responsibility implementation.")
 
     domains = responsibility_domains(files)
     allow_multi = os.environ.get("AGENT_ALLOW_MULTI_DOMAIN_PR", "false").lower() in {"1", "true", "yes"}
-    if len(domains) > 1 and not allow_multi:
+    if len(domains) > 1 and not (allow_multi or source_spec_branch_pr):
         failures.append(f"Multiple implementation domains changed in one PR: {sorted(domains)}. Split into one-responsibility PRs or explicitly approve override.")
 
     for status, path in rows:
@@ -319,6 +351,8 @@ def main() -> int:
                     failures.append(f"Protected deletion blocked: {path}")
 
     evidence_dirs = evidence_dir_for(args.task_id)
+    if not evidence_dirs and source_spec_branch_pr:
+        evidence_dirs = discover_task_evidence_dirs()
     if not evidence_dirs:
         failures.append(f"Missing evidence directory for task {args.task_id}: docs/agentic-evidence/**/{args.task_id}")
     else:

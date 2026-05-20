@@ -87,6 +87,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "OPENAI_API_KEY is not configured; skipping live Codex POC-to-PR automation."
+            exit 0
+          fi
           MODE="${{ github.event.inputs.mode || 'local' }}"
           ALLOW_CLOUD="${{ github.event.inputs.allow_cloud || 'false' }}"
           if [ "$MODE" = "cloud" ] && [ "$ALLOW_CLOUD" != "true" ]; then

@@ -43,8 +43,8 @@ jobs:
         with:
           fetch-depth: 100
       - name: Run agent guardrails
-        run: .ai/scripts/check-agent-guardrails.sh
+        run: bash .ai/scripts/check-agent-guardrails.sh
       - name: Run self-review heuristic
-        run: .ai/scripts/agent-self-review.py --format markdown --strict
+        run: python .ai/scripts/agent-self-review.py --format markdown --strict
       - name: Run scale-readiness heuristic
-        run: .ai/scripts/check-scale-readiness.py --format markdown
+        run: python .ai/scripts/check-scale-readiness.py --format markdown

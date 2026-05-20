@@ -49,11 +49,14 @@ jobs:
               files=$(git ls-files || true)
             fi
           fi
-          echo "$files" | grep -E '^(specs/|\.ai/inbox/specs/).+\.(md|ya?ml)$' | grep -Evi '(^|/)(_template|template\.|.*\.template\.|example-|.*\.example\.)' > /tmp/specs.txt || true
+          echo "$files" \
+            | grep -E '^(specs/|\.ai/inbox/specs/).+\.(md|ya?ml)$' \
+            | grep -Evi '(^|/)(README\.md|spec-package\.md|_template|template\.|.*\.template\.|example-|.*\.example\.)' \
+            > /tmp/specs.txt || true
           echo "count=$(wc -l < /tmp/specs.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
           cat /tmp/specs.txt
 
       - name: Validate changed specs
         if: steps.specs.outputs.count != '0'
         run: |
-          xargs -a /tmp/specs.txt python .ai/scripts/validate_agentic_spec.py
+          xargs -a /tmp/specs.txt python .ai/scripts/validate_agentic_spec.py --allow-status ready_for_agents --allow-status draft

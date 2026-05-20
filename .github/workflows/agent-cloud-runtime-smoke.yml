@@ -18,12 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Detect runtime
-        run: .ai/scripts/detect-runtime.sh
+        run: bash .ai/scripts/detect-runtime.sh
       - name: Bootstrap task env
         env:
           AGENT_TASK_ID: smoke-test
-        run: .ai/scripts/bootstrap-task-env.sh
+        run: bash .ai/scripts/bootstrap-task-env.sh
       - name: Agent quality gate
         env:
           AGENT_TASK_ID: smoke-test
-        run: .ai/scripts/run-agent-quality-gate.sh
+        run: bash .ai/scripts/run-agent-quality-gate.sh

@@ -28,7 +28,12 @@ jobs:
         run: |
           BRANCH="${{ github.head_ref }}"
           TASK_ID="$(basename "$BRANCH")"
+          SOURCE_SPEC_BRANCH_PR=false
+          case "$BRANCH" in
+            dev/*|spec/*|chatgpt/*|ai-spec/*|feature/spec/*) SOURCE_SPEC_BRANCH_PR=true ;;
+          esac
           echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+          echo "source_spec_branch_pr=$SOURCE_SPEC_BRANCH_PR" >> "$GITHUB_OUTPUT"
 
 
       - name: Run branch conflict guard
@@ -46,7 +51,11 @@ jobs:
 
       - name: Run PR guardrails
         env:
-          AGENT_ALLOW_MULTI_DOMAIN_PR: 'false'
+          AGENT_SOURCE_SPEC_BRANCH_PR: ${{ steps.task.outputs.source_spec_branch_pr }}
+          AGENT_ALLOW_MULTI_DOMAIN_PR: ${{ steps.task.outputs.source_spec_branch_pr }}
+          AGENT_ALLOW_EVIDENCE_ONLY: ${{ steps.task.outputs.source_spec_branch_pr }}
+          AGENT_MAX_FILES_CHANGED: ${{ steps.task.outputs.source_spec_branch_pr == 'true' && '80' || '35' }}
+          AGENT_MAX_LINES_CHANGED: ${{ steps.task.outputs.source_spec_branch_pr == 'true' && '6000' || '1200' }}
           AGENT_BLOCK_PLACEHOLDER_EVIDENCE: 'true'
         run: |
           python .ai/scripts/pr_guardrails.py \

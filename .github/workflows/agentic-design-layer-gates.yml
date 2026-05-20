@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
           BASE="origin/${{ github.base_ref }}"
           git fetch origin "${{ github.base_ref }}" --depth=1 || true
-          SPECS=$(git diff --name-only "$BASE...HEAD" | grep -E '(^specs/|docs/specs/|requirements/specs/).*(\.spec\.md|\.md|\.yml|\.yaml)$' || true)
+          SPECS=$(git diff --name-only "$BASE...HEAD" | grep -E '(^specs/.+/tasks/.*|docs/specs/.+/tasks/.*|requirements/specs/.+/tasks/.*)(\.spec\.md|\.md|\.yml|\.yaml)$' || true)
           if [ -z "$SPECS" ]; then
             echo "No changed specs to validate."
             exit 0

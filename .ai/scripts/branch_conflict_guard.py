@@ -214,6 +214,8 @@ def list_active_refs(base_branch: str, exclude_branches: Iterable[str], branch_p
         branch = normalize_branch_from_ref(ref)
         if not branch or branch in excluded or ref.endswith("/HEAD"):
             continue
+        if branch.startswith("pull/") or ref.startswith("pull/") or ref.startswith("origin/pull/"):
+            continue
         if not path_matches_any(branch, branch_patterns):
             continue
         # Prefer remote refs because they are visible to cloud workers too.

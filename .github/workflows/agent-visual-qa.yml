@@ -42,7 +42,7 @@ jobs:
 
       - name: Run visual QA scaffold
         run: |
-          .ai/scripts/run_visual_qa.sh "$AGENT_STORY_ID"
+          bash .ai/scripts/run_visual_qa.sh "$AGENT_STORY_ID"
           python .ai/scripts/visual_qa_report.py --story "$AGENT_STORY_ID"
 
       - name: Upload visual QA artifacts
