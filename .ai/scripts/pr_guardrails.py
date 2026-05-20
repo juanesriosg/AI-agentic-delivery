@@ -51,8 +51,8 @@ def path_within_scopes(path: str, scopes: Iterable[str]) -> bool:
     return False
 
 
-def scope_paths_from_env() -> list[str]:
-    raw = os.environ.get("AGENTIC_SCOPE_PATHS_JSON", "").strip()
+def scope_paths_from_env(name: str = "AGENTIC_SCOPE_PATHS_JSON") -> list[str]:
+    raw = os.environ.get(name, "").strip()
     if not raw:
         return []
     try:
@@ -373,6 +373,7 @@ def main() -> int:
     failures: list[str] = []
     rows = changed_files(args.base)
     scope_paths = scope_paths_from_env()
+    conflict_scope_paths = scope_paths_from_env("AGENTIC_CONFLICT_SCOPE_PATHS_JSON") or scope_paths
     if scope_paths:
         rows = [(status, path) for status, path in rows if path_within_scopes(path, scope_paths)]
     files = [p for _, p in rows]
@@ -438,7 +439,7 @@ def main() -> int:
             "--json-output", ".agent/branch-conflict/pr-guard.json",
             "--markdown-output", ".agent/branch-conflict/pr-guard.md",
         ]
-        for path in scope_paths:
+        for path in conflict_scope_paths:
             conflict_cmd.extend(["--path", path])
         cp = subprocess.run(conflict_cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if cp.returncode != 0:

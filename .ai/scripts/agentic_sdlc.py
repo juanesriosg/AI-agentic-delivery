@@ -2614,7 +2614,7 @@ Revert this PR. No production deployment should occur without release gate appro
         ])
         for pattern in cfg.get("ignore_patterns", []):
             cmd.extend(["--ignore-pattern", str(pattern)])
-        expected_paths = self.task_change_scopes(spec, task) if self.run_tasks_in_current_worktree() else list(task.expected_paths or [])
+        expected_paths = self.task_branch_conflict_scopes(spec, task) if self.run_tasks_in_current_worktree() else list(task.expected_paths or [])
         if phase == "preflight":
             if expected_paths:
                 for path in expected_paths:
@@ -2664,6 +2664,7 @@ Revert this PR. No production deployment should occur without release gate appro
                 else:
                     env = {
                         "AGENTIC_SCOPE_PATHS_JSON": json.dumps(self.task_change_scopes(spec, task)),
+                        "AGENTIC_CONFLICT_SCOPE_PATHS_JSON": json.dumps(self.task_branch_conflict_scopes(spec, task)),
                     }
                     if script.name == "pr_guardrails.py" and self.push_tasks_to_source_spec_branch():
                         # Source-spec-branch mode commits validated evidence and
@@ -2697,6 +2698,16 @@ Revert this PR. No production deployment should occur without release gate appro
         ])
         normalized = {str(scope).replace("\\", "/").strip("/") for scope in scopes if str(scope).strip()}
         return sorted(normalized)
+
+    def task_branch_conflict_scopes(self, spec: SpecCandidate, task: AgentTask) -> List[str]:
+        """Paths that should count as implementation ownership conflicts.
+
+        The source task-list spec is a progress document in source-spec mode.
+        Older spec branches may still touch it, so it must be staged when this
+        task completes but should not block implementation ownership checks.
+        """
+        spec_path = spec.path.replace("\\", "/").strip("/")
+        return [path for path in self.task_change_scopes(spec, task) if path != spec_path]
 
     def task_completed_in_source_branch(self, spec: SpecCandidate, task: AgentTask) -> bool:
         """Return true when a previous run committed the task completion marker.

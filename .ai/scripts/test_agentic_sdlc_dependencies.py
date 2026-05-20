@@ -163,6 +163,32 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         self.assertIn(f"docs/agentic-evidence/{spec.id}/layer-gates", scopes)
         self.assertIn(spec.path, scopes)
 
+    def test_task_branch_conflict_scopes_exclude_source_spec_progress_file(self) -> None:
+        orchestrator = make_orchestrator()
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/task-f1-t1",
+            path="specs/city-pipeline-aws-cost-mvp/tasks/tasks-trd-p0-f1-t1-worker-wrapper-artifacts.md",
+            sha="aaa",
+            content=LEGACY_WORKER_WRAPPER_SPEC,
+            status="ready_for_agents",
+        )
+        task = agentic_sdlc.AgentTask(
+            task_id="artifact-manifest-contract",
+            title="Add artifact manifest contract",
+            responsibility="Define manifest.",
+            domain="backend",
+            acceptance_criteria=["Manifest is defined."],
+            expected_paths=["city_pipelines/cloud/artifacts.py"],
+            layer="database",
+            depends_on=["worker-wrapper-design-gate"],
+        )
+
+        scopes = orchestrator.task_branch_conflict_scopes(spec, task)
+
+        self.assertIn("city_pipelines/cloud/artifacts.py", scopes)
+        self.assertIn(f"docs/agentic-evidence/{spec.id}/artifact-manifest-contract", scopes)
+        self.assertNotIn(spec.path, scopes)
+
     def test_windows_worktree_shell_scripts_are_normalized_to_lf(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
