@@ -75,9 +75,21 @@ def make_orchestrator() -> object:
             "push_tasks_to_source_spec_branch": True,
             "run_tasks_in_current_worktree": False,
         },
+        "execution": {
+            "analysis_agent_timeout_seconds": 180,
+            "write_agent_timeout_seconds": 900,
+            "analysis_stage_failures_block_task": False,
+            "readonly_agents_in_isolated_worktree": True,
+        },
         "codex": {"sandbox": "workspace-write", "approval_policy": "never"},
     }
+    orchestrator.repo = Path.cwd()
+    orchestrator.worktree_dir = Path.cwd() / ".agent" / "worktrees"
+    orchestrator.dry_run = False
+    orchestrator.verbose = False
     orchestrator.write_agent_log = lambda *args, **kwargs: None
+    orchestrator.log = lambda *args, **kwargs: None
+    orchestrator.debug = lambda *args, **kwargs: None
     orchestrator.task_completed_in_source_branch_by_id = lambda *args, **kwargs: False
     return orchestrator
 
@@ -256,6 +268,107 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         self.assertIn("implementation/evidence stage", policy)
         self.assertIn("expected paths", policy)
         self.assertIn("Do not run `git add`, `git commit`, `git push`", policy)
+
+    def test_analysis_stages_are_isolated_nonblocking_and_timeboxed_by_default(self) -> None:
+        orchestrator = make_orchestrator()
+
+        self.assertTrue(orchestrator.readonly_agents_in_isolated_worktree())
+        self.assertFalse(orchestrator.analysis_stage_failures_block_task())
+        old_analysis_timeout = os.environ.pop("AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS", None)
+        old_write_timeout = os.environ.pop("AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS", None)
+        try:
+            self.assertEqual(180, orchestrator.codex_stage_timeout_seconds(allow_write=False))
+            self.assertEqual(900, orchestrator.codex_stage_timeout_seconds(allow_write=True))
+        finally:
+            if old_analysis_timeout is not None:
+                os.environ["AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS"] = old_analysis_timeout
+            if old_write_timeout is not None:
+                os.environ["AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS"] = old_write_timeout
+
+    def test_run_agent_sequence_continues_after_advisory_analysis_failure(self) -> None:
+        orchestrator = make_orchestrator()
+        calls: list[tuple[str, bool]] = []
+        orchestrator.render_task_prompt = lambda *args, **kwargs: "prompt"
+        orchestrator.prepare_readonly_agent_worktree = lambda *args, **kwargs: Path.cwd()
+        orchestrator.cleanup_readonly_agent_worktree = lambda *args, **kwargs: None
+
+        def fake_call_codex(prompt, cwd, run_dir, agent, mode, allow_write):
+            calls.append((agent, allow_write))
+            if agent == "product-requirements-agent":
+                raise agentic_sdlc.OrchestratorError("simulated advisory failure")
+
+        orchestrator.call_codex = fake_call_codex
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/task",
+            path="specs/task.md",
+            sha="aaa",
+            content=CRUD_SPEC,
+            status="ready_for_agents",
+        )
+        task = agentic_sdlc.AgentTask(
+            task_id="crud-database",
+            title="Local CRUD data model",
+            responsibility="Implement local persistence contract.",
+            domain="database",
+            acceptance_criteria=["Data model supports CRUD records."],
+            layer="database",
+            depends_on=[],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            orchestrator.run_agent_sequence(
+                spec,
+                task,
+                worktree=root,
+                story_dir=root / "story",
+                task_dir=root / "task",
+                mode="local",
+            )
+
+        self.assertEqual("product-requirements-agent", calls[0][0])
+        self.assertIn(("database-engineer", True), calls)
+        self.assertEqual("pr-documentation-agent", calls[-1][0])
+
+    def test_run_agent_sequence_blocks_when_write_stage_fails(self) -> None:
+        orchestrator = make_orchestrator()
+        orchestrator.render_task_prompt = lambda *args, **kwargs: "prompt"
+        orchestrator.prepare_readonly_agent_worktree = lambda *args, **kwargs: Path.cwd()
+        orchestrator.cleanup_readonly_agent_worktree = lambda *args, **kwargs: None
+
+        def fake_call_codex(prompt, cwd, run_dir, agent, mode, allow_write):
+            if allow_write:
+                raise agentic_sdlc.OrchestratorError("simulated implementation failure")
+
+        orchestrator.call_codex = fake_call_codex
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/task",
+            path="specs/task.md",
+            sha="aaa",
+            content=CRUD_SPEC,
+            status="ready_for_agents",
+        )
+        task = agentic_sdlc.AgentTask(
+            task_id="crud-database",
+            title="Local CRUD data model",
+            responsibility="Implement local persistence contract.",
+            domain="database",
+            acceptance_criteria=["Data model supports CRUD records."],
+            layer="database",
+            depends_on=[],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaises(agentic_sdlc.OrchestratorError):
+                orchestrator.run_agent_sequence(
+                    spec,
+                    task,
+                    worktree=root,
+                    story_dir=root / "story",
+                    task_dir=root / "task",
+                    mode="local",
+                )
 
     def test_spec_id_is_stable_for_crud_spec_progress_updates(self) -> None:
         first = agentic_sdlc.SpecCandidate(

@@ -114,6 +114,10 @@
     ],
     "retry_failed_specs": true,
     "default_mode": "local",
+    "analysis_agent_timeout_seconds": 180,
+    "write_agent_timeout_seconds": 900,
+    "analysis_stage_failures_block_task": false,
+    "readonly_agents_in_isolated_worktree": true,
     "cloud_requires_explicit_request": true,
     "cloud_only_when_explicitly_requested": true
   },
