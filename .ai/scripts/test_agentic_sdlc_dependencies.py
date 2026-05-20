@@ -238,6 +238,25 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         self.assertEqual(orchestrator.codex_sandbox(allow_write=True), "danger-full-access")
         self.assertEqual(orchestrator.codex_approval_policy(), "never")
 
+    def test_analysis_stage_prompt_policy_forbids_mutating_files(self) -> None:
+        orchestrator = make_orchestrator()
+
+        policy = orchestrator.stage_write_policy(allow_write=False)
+
+        self.assertIn("analysis-only stage", policy)
+        self.assertIn("must not create, edit, delete, move, format, or stage files", policy)
+        self.assertIn("Do not use `apply_patch`", policy)
+        self.assertIn("Do not implement the task in this stage", policy)
+
+    def test_write_stage_prompt_policy_leaves_git_to_orchestrator(self) -> None:
+        orchestrator = make_orchestrator()
+
+        policy = orchestrator.stage_write_policy(allow_write=True)
+
+        self.assertIn("implementation/evidence stage", policy)
+        self.assertIn("expected paths", policy)
+        self.assertIn("Do not run `git add`, `git commit`, `git push`", policy)
+
     def test_spec_id_is_stable_for_crud_spec_progress_updates(self) -> None:
         first = agentic_sdlc.SpecCandidate(
             branch="dev/crud-smoke",

@@ -2029,7 +2029,7 @@ class AgenticSDLC:
         self.log(f"    Agent sequence: {total} agent step(s) for task {task.task_id}")
         for index, (agent_file, objective, allow_write) in enumerate(sequence, start=1):
             agent_name = agent_file.replace(".agent.md", "")
-            prompt = self.render_task_prompt(agent_file, objective, spec, task, story_dir, task_dir, mode)
+            prompt = self.render_task_prompt(agent_file, objective, spec, task, story_dir, task_dir, mode, allow_write=allow_write)
             prompt_path = task_dir / "prompts" / f"{safe_slug(agent_name)}.md"
             write_text(prompt_path, prompt)
             self.log(f"    [{index}/{total}] START {agent_name}: {objective}")
@@ -2061,7 +2061,28 @@ class AgenticSDLC:
         }
         return mapping.get(domain, "mid-software-engineer.agent.md")
 
-    def render_task_prompt(self, agent_file: str, objective: str, spec: SpecCandidate, task: AgentTask, story_dir: Path, task_dir: Path, mode: str) -> str:
+    def stage_write_policy(self, allow_write: bool) -> str:
+        if allow_write:
+            return textwrap.dedent(
+                """
+                This is an implementation/evidence stage.
+                - You may edit files only within the task expected paths, task evidence paths, and narrowly required tests.
+                - Do not edit unrelated files, broad-format the repo, or rewrite prior user changes.
+                - Do not run `git add`, `git commit`, `git push`, `git rebase`, or PR creation commands; the orchestrator handles staging, commits, pushes, and PRs after gates pass.
+                """
+            ).strip()
+        return textwrap.dedent(
+            """
+            This is an analysis-only stage.
+            - You have full local command access for inspection, but you must not create, edit, delete, move, format, or stage files.
+            - Do not use `apply_patch` or shell redirection to write files.
+            - Do not run mutating git commands, package installs, formatters, generators, bootstrap scripts, or tests that write fixtures/caches unless this prompt explicitly says to do so.
+            - Finish with concise findings, acceptance-criteria mapping, blockers/gaps, and the next implementation action. Do not implement the task in this stage.
+            """
+        ).strip()
+
+    def render_task_prompt(self, agent_file: str, objective: str, spec: SpecCandidate, task: AgentTask, story_dir: Path, task_dir: Path, mode: str, allow_write: bool = True) -> str:
+        stage_policy = self.stage_write_policy(allow_write)
         return self.render_prompt(
             agent_file=agent_file,
             title=objective,
@@ -2076,6 +2097,9 @@ class AgenticSDLC:
             Task title: {task.title}
             Domain: {task.domain}
             Layer: {self.task_layer(task)}
+            Stage write policy:
+            {stage_policy}
+
             Declared dependencies: {json.dumps(task.depends_on, indent=2)}
             Responsibility: {task.responsibility}
             Risk: {task.risk}
