@@ -24,7 +24,7 @@ RUNTIME_PREFIXES = (
     ".agent/", ".venv/", "venv/", "node_modules/", "vendor/bundle/",
     "__pycache__/", ".pytest_cache/", ".mypy_cache/", "target/", "dist/", "build/",
 )
-EVIDENCE_PREFIXES = ("docs/agentic-evidence/", "docs/agentic-path-leases/", ".agent/")
+EVIDENCE_PREFIXES = ("docs/agentic-evidence/", ".agent/")
 UI_EXTENSIONS = {".tsx", ".jsx", ".vue", ".svelte", ".css", ".scss", ".html"}
 CODE_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".kt", ".cs", ".rb", ".php"}
 API_HINTS = ["api/", "routes/", "controllers/", "handlers/", "lambda", "server", "backend"]
@@ -38,6 +38,30 @@ def run(cmd: List[str], check: bool = True) -> str:
     if check and cp.returncode != 0:
         raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{cp.stderr}")
     return cp.stdout
+
+
+def path_within_scopes(path: str, scopes: Iterable[str]) -> bool:
+    normalized = path.replace("\\", "/").strip("/")
+    for scope in scopes:
+        normalized_scope = str(scope).replace("\\", "/").strip("/")
+        if not normalized_scope:
+            continue
+        if normalized == normalized_scope or normalized.startswith(normalized_scope.rstrip("/") + "/"):
+            return True
+    return False
+
+
+def scope_paths_from_env() -> list[str]:
+    raw = os.environ.get("AGENTIC_SCOPE_PATHS_JSON", "").strip()
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(item).replace("\\", "/").strip("/") for item in parsed if str(item).strip()]
 
 
 def ref_exists(ref: str) -> bool:
@@ -139,6 +163,32 @@ def diff_stat(base: str) -> Tuple[int, int]:
         deleted += d
     untracked = run(["git", "ls-files", "--others", "--exclude-standard"], check=False).splitlines()
     added += sum(text_file_line_count(path) for path in untracked)
+    return added, deleted
+
+
+def diff_stat_for_files(base: str, files: Iterable[str]) -> Tuple[int, int]:
+    """Return line counts for selected paths only.
+
+    Guardrails should judge PR size by implementation changes, not by runtime
+    artifacts or generated agent evidence. This keeps evidence-rich PRs from
+    failing only because agents wrote QA/PM/test reports.
+    """
+    selected = sorted({f.replace("\\", "/") for f in files if f})
+    if not selected:
+        return 0, 0
+    base_ref = resolve_base_ref(base)
+    added = deleted = 0
+    for path in selected:
+        for cmd in [
+            ["git", "diff", "--numstat", f"{base_ref}...HEAD", "--", path],
+            ["git", "diff", "--cached", "--numstat", "--", path],
+            ["git", "diff", "--numstat", "--", path],
+        ]:
+            a, d = numstat_from_output(run(cmd, check=False))
+            added += a
+            deleted += d
+    untracked = set(run(["git", "ls-files", "--others", "--exclude-standard"], check=False).splitlines())
+    added += sum(text_file_line_count(path) for path in selected if path in untracked)
     return added, deleted
 
 
@@ -322,26 +372,36 @@ def main() -> int:
 
     failures: list[str] = []
     rows = changed_files(args.base)
+    scope_paths = scope_paths_from_env()
+    if scope_paths:
+        rows = [(status, path) for status, path in rows if path_within_scopes(path, scope_paths)]
     files = [p for _, p in rows]
-    added, deleted = diff_stat(args.base)
+
+    # Size guardrails are based on implementation files only. Runtime artifacts
+    # and agent evidence can be large but should not force agents to throw away
+    # useful QA/PM/test traces. Evidence still has its own quality checks below.
+    runtime_files = [f for f in files if is_runtime_file(f)]
+    reviewable_files = [f for f in files if not is_runtime_file(f)]
+    evidence_files = [f for f in reviewable_files if f.startswith(EVIDENCE_PREFIXES)]
+    implementation_files = [f for f in reviewable_files if not f.startswith(EVIDENCE_PREFIXES)]
+
+    added, deleted = diff_stat_for_files(args.base, implementation_files)
+    evidence_added, evidence_deleted = diff_stat_for_files(args.base, evidence_files)
     total_lines = added + deleted
+    evidence_total_lines = evidence_added + evidence_deleted
 
-    source_spec_branch_pr = os.environ.get("AGENT_SOURCE_SPEC_BRANCH_PR", "false").lower() in {"1", "true", "yes"}
+    if len(implementation_files) > args.max_files:
+        failures.append(f"Too many implementation files changed: {len(implementation_files)} > {args.max_files}. Split the PR.")
+    if total_lines > args.max_lines:
+        failures.append(f"Too many implementation lines changed: {total_lines} > {args.max_lines}. Split the PR.")
 
-    if len(files) > args.max_files and not source_spec_branch_pr:
-        failures.append(f"Too many files changed: {len(files)} > {args.max_files}. Split the PR.")
     allow_evidence_only = os.environ.get("AGENT_ALLOW_EVIDENCE_ONLY", "false").lower() in {"1", "true", "yes"}
-    evidence_only = is_evidence_only(files)
-    evidence_or_support_only = is_evidence_or_support_only(files)
-
-    if total_lines > args.max_lines and not (source_spec_branch_pr or (allow_evidence_only and evidence_or_support_only)):
-        failures.append(f"Too many lines changed: {total_lines} > {args.max_lines}. Split the PR.")
-    if evidence_only and not allow_evidence_only:
+    if is_evidence_only(files) and not allow_evidence_only:
         failures.append("PR only changes agent evidence/runtime files. Suppress this PR or add the actual one-responsibility implementation.")
 
-    domains = responsibility_domains(files)
+    domains = responsibility_domains(implementation_files)
     allow_multi = os.environ.get("AGENT_ALLOW_MULTI_DOMAIN_PR", "false").lower() in {"1", "true", "yes"}
-    if len(domains) > 1 and not (allow_multi or source_spec_branch_pr):
+    if len(domains) > 1 and not allow_multi:
         failures.append(f"Multiple implementation domains changed in one PR: {sorted(domains)}. Split into one-responsibility PRs or explicitly approve override.")
 
     for status, path in rows:
@@ -351,8 +411,6 @@ def main() -> int:
                     failures.append(f"Protected deletion blocked: {path}")
 
     evidence_dirs = evidence_dir_for(args.task_id)
-    if not evidence_dirs and source_spec_branch_pr:
-        evidence_dirs = discover_task_evidence_dirs()
     if not evidence_dirs:
         failures.append(f"Missing evidence directory for task {args.task_id}: docs/agentic-evidence/**/{args.task_id}")
     else:
@@ -380,6 +438,8 @@ def main() -> int:
             "--json-output", ".agent/branch-conflict/pr-guard.json",
             "--markdown-output", ".agent/branch-conflict/pr-guard.md",
         ]
+        for path in scope_paths:
+            conflict_cmd.extend(["--path", path])
         cp = subprocess.run(conflict_cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if cp.returncode != 0:
             failures.append("Branch conflict guard failed. This PR overlaps files changed or reserved by another active branch. See .agent/branch-conflict/pr-guard.md if available.")
@@ -391,11 +451,21 @@ def main() -> int:
 
     report = {
         "files_changed": len(files),
+        "implementation_files_changed": len(implementation_files),
+        "evidence_files_changed": len(evidence_files),
+        "runtime_files_changed": len(runtime_files),
+        "implementation_lines_added": added,
+        "implementation_lines_deleted": deleted,
+        "evidence_lines_added": evidence_added,
+        "evidence_lines_deleted": evidence_deleted,
         "lines_added": added,
         "lines_deleted": deleted,
-        "domains": sorted(responsibility_domains(files)),
+        "domains": sorted(responsibility_domains(implementation_files)),
         "failures": failures,
         "files": files,
+        "implementation_files": implementation_files,
+        "evidence_files": evidence_files,
+        "runtime_files": runtime_files,
     }
     print(json.dumps(report, indent=2))
     return 1 if failures else 0

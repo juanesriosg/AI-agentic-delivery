@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import Iterable, List, Optional
 
 AWS_MUTATING_CLI_PATTERNS = [
     r"aws\s+lambda\s+create-function",
@@ -48,6 +49,30 @@ def run(cmd: List[str], check: bool = True) -> str:
     return cp.stdout
 
 
+def path_within_scopes(path: str, scopes: Iterable[str]) -> bool:
+    normalized = path.replace("\\", "/").strip("/")
+    for scope in scopes:
+        normalized_scope = str(scope).replace("\\", "/").strip("/")
+        if not normalized_scope:
+            continue
+        if normalized == normalized_scope or normalized.startswith(normalized_scope.rstrip("/") + "/"):
+            return True
+    return False
+
+
+def scope_paths_from_env() -> list[str]:
+    raw = os.environ.get("AGENTIC_SCOPE_PATHS_JSON", "").strip()
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(item).replace("\\", "/").strip("/") for item in parsed if str(item).strip()]
+
+
 def ref_exists(ref: str) -> bool:
     cp = subprocess.run(["git", "rev-parse", "--verify", "--quiet", ref], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return cp.returncode == 0
@@ -76,21 +101,27 @@ def expand_path(path: str) -> list[str]:
     return [path]
 
 
-def changed_files(base: str) -> List[str]:
+def changed_files(base: str, scopes: Optional[list[str]] = None) -> List[str]:
     base_ref = resolve_base_ref(base)
-    out = run(["git", "diff", "--name-only", f"{base_ref}...HEAD"], check=False)
+    pathspec = ["--", *scopes] if scopes else []
+    out = run(["git", "diff", "--name-only", f"{base_ref}...HEAD", *pathspec], check=False)
     files = [x.strip() for x in out.splitlines() if x.strip()]
     status = run(["git", "status", "--porcelain"], check=False)
     for line in status.splitlines():
         if line.strip():
             raw = line[3:].strip() if len(line) > 3 else line.strip()
             files.extend(expand_path(raw))
-    return sorted(set(files))
+    unique = sorted(set(files))
+    if scopes:
+        unique = [path for path in unique if path_within_scopes(path, scopes)]
+    return unique
 
 
-def untracked_text() -> str:
+def untracked_text(scopes: Optional[list[str]] = None) -> str:
     chunks: list[str] = []
     for name in run(["git", "ls-files", "--others", "--exclude-standard"], check=False).splitlines():
+        if scopes and not path_within_scopes(name, scopes):
+            continue
         p = Path(name)
         try:
             data = p.read_bytes()
@@ -103,13 +134,14 @@ def untracked_text() -> str:
     return "\n".join(chunks)
 
 
-def changed_text(base: str) -> str:
+def changed_text(base: str, scopes: Optional[list[str]] = None) -> str:
     base_ref = resolve_base_ref(base)
+    pathspec = ["--", *scopes] if scopes else []
     parts = [
-        run(["git", "diff", f"{base_ref}...HEAD"], check=False),
-        run(["git", "diff", "--cached"], check=False),
-        run(["git", "diff"], check=False),
-        untracked_text(),
+        run(["git", "diff", f"{base_ref}...HEAD", *pathspec], check=False),
+        run(["git", "diff", "--cached", *pathspec], check=False),
+        run(["git", "diff", *pathspec], check=False),
+        untracked_text(scopes),
     ]
     return "\n".join(part for part in parts if part)
 
@@ -121,8 +153,9 @@ def main() -> int:
     parser.add_argument("--aws-change", action="store_true")
     args = parser.parse_args()
 
-    files = changed_files(args.base)
-    diff = changed_text(args.base)
+    scope_paths = scope_paths_from_env()
+    files = changed_files(args.base, scopes=scope_paths)
+    diff = changed_text(args.base, scopes=scope_paths)
     failures: list[str] = []
     warnings: list[str] = []
 

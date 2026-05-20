@@ -40,18 +40,23 @@ DEFAULT_IGNORE_SPEC_PATTERNS = [
     "**/drafts/**",
     "**/README.md",
 ]
-RUNTIME_EXCLUDE_PATHS = [
-    ":(exclude).agent",
-    ":(exclude).agent/**",
-    ":(exclude).venv",
-    ":(exclude).venv/**",
-    ":(exclude)venv",
-    ":(exclude)venv/**",
-    ":(exclude)node_modules",
-    ":(exclude)node_modules/**",
-    ":(exclude)**/__pycache__/**",
-    ":(exclude)**/*.pyc",
-]
+RUNTIME_EXCLUDE_ROOTS = {
+    ".agent",
+    ".venv",
+    "venv",
+    "node_modules",
+    "vendor/bundle",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    "target",
+    "dist",
+    "build",
+}
+SHELL_SCRIPT_GLOBS = (
+    ".ai/scripts/*.sh",
+    ".ai/scripts/**/*.sh",
+)
 ISO = "%Y-%m-%dT%H:%M:%SZ"
 
 
@@ -66,6 +71,11 @@ class BranchConflictBlocked(OrchestratorError):
 
 class LayerDependencyBlocked(OrchestratorError):
     """Raised when a task cannot start because DB/API/frontend layer order is not satisfied."""
+    pass
+
+
+class TaskDependencyBlocked(OrchestratorError):
+    """Raised when a task cannot start because its declared task dependencies are incomplete."""
     pass
 
 
@@ -403,10 +413,12 @@ def clean_spec_stem(path: str) -> str:
 
 def is_runtime_or_generated_path(path: str) -> bool:
     normalized = path.replace("\\", "/")
-    return normalized.startswith((
-        ".agent/", ".venv/", "venv/", "node_modules/", "vendor/bundle/",
-        "__pycache__/", ".pytest_cache/", ".mypy_cache/", "target/", "dist/", "build/"
-    ))
+    parts = [part for part in normalized.split("/") if part]
+    return bool(parts) and (
+        parts[0] in RUNTIME_EXCLUDE_ROOTS
+        or "__pycache__" in parts
+        or normalized.endswith(".pyc")
+    )
 
 
 def is_evidence_path(path: str, evidence_dir: str = "docs/agentic-evidence") -> bool:
@@ -417,6 +429,65 @@ def is_evidence_path(path: str, evidence_dir: str = "docs/agentic-evidence") -> 
 def git(repo: Path, *args: str, check: bool = True) -> str:
     cp = run(["git", *args], cwd=repo, check=check, capture=True)
     return (cp.stdout or "").strip()
+
+
+def split_nul_paths(value: str) -> List[str]:
+    return [path for path in value.split("\0") if path]
+
+
+def path_within_scopes(path: str, scopes: Iterable[str]) -> bool:
+    normalized = path.replace("\\", "/").strip("/")
+    for scope in scopes:
+        normalized_scope = str(scope).replace("\\", "/").strip("/")
+        if not normalized_scope:
+            continue
+        if normalized == normalized_scope or normalized.startswith(normalized_scope.rstrip("/") + "/"):
+            return True
+    return False
+
+
+def git_changed_paths(repo: Path) -> List[str]:
+    """Return tracked and untracked changed paths without ignored runtime files."""
+    tracked = split_nul_paths(git(repo, "diff", "--name-only", "-z", "HEAD"))
+    untracked = split_nul_paths(git(repo, "ls-files", "--others", "--exclude-standard", "-z"))
+    paths = sorted(set(tracked + untracked))
+    return [path for path in paths if not is_runtime_or_generated_path(path)]
+
+
+def git_add_changed_paths(repo: Path, scopes: Optional[Iterable[str]] = None) -> List[str]:
+    """Stage filtered changed paths without using ignored pathspec excludes.
+
+    `git add -A -- . :(exclude).agent/**` still fails on some Git/Windows
+    combinations when `.agent` is ignored, because Git validates the ignored
+    pathspec before applying the exclusion. Build the add list explicitly so
+    runtime artifacts are never passed to `git add`.
+    """
+    paths = git_changed_paths(repo)
+    if scopes:
+        paths = [path for path in paths if path_within_scopes(path, scopes)]
+    if not paths:
+        return []
+    chunk_size = 100
+    for start in range(0, len(paths), chunk_size):
+        git(repo, "add", "-A", "--", *paths[start:start + chunk_size])
+    return paths
+
+
+def normalize_shell_script_line_endings(repo: Path) -> List[str]:
+    """Ensure bash scripts can run from Windows-created git worktrees."""
+    changed: List[str] = []
+    candidates = set()
+    for pattern in SHELL_SCRIPT_GLOBS:
+        candidates.update(repo.glob(pattern))
+    for path in sorted(candidates):
+        if not path.is_file():
+            continue
+        data = path.read_bytes()
+        if b"\r" not in data:
+            continue
+        path.write_bytes(data.replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
+        changed.append(path.relative_to(repo).as_posix())
+    return changed
 
 
 def gh(repo: Path, *args: str, check: bool = True) -> str:
@@ -446,7 +517,10 @@ class SpecCandidate:
     @property
     def id(self) -> str:
         base = clean_spec_stem(self.path)
-        return f"spec-{short_sha(self.branch + ':' + self.path + ':' + self.sha, 10)}-{safe_slug(base, 40)}"
+        # Evidence and task-completion markers must survive normal progress
+        # updates to the spec file. The registry key still includes content SHA,
+        # but the public spec id is stable for a branch/path pair.
+        return f"spec-{short_sha(self.branch + ':' + self.path, 10)}-{safe_slug(base, 40)}"
 
     @property
     def title(self) -> str:
@@ -513,6 +587,7 @@ class AgenticSDLC:
                 "implementation_branch_prefix": "ai",
                 "base_pr_to_source_spec_branch": True,
                 "push_tasks_to_source_spec_branch": False,
+                "run_tasks_in_current_worktree": False,
                 "create_task_prs": True,
                 "create_final_pr_from_spec_branch": False,
                 "final_pr_base_branch": "main",
@@ -558,7 +633,8 @@ class AgenticSDLC:
             },
             "codex": {
                 "binary": "codex",
-                "sandbox": "workspace-write",
+                "sandbox": "danger-full-access",
+                "approval_policy": "never",
                 "json_events": True,
                 "model": "gpt-5.5",
                 "reasoning_effort": "xhigh",
@@ -884,6 +960,18 @@ class AgenticSDLC:
         """
         return bool(self.config.get("branching", {}).get("push_tasks_to_source_spec_branch", False))
 
+    def run_tasks_in_current_worktree(self) -> bool:
+        """Run task agents in the visible checkout instead of hidden detached worktrees.
+
+        This is useful for local Windows development where the manager expects
+        generated code/evidence to appear immediately in the IDE. The explicit
+        environment override lets one-off runs opt in without editing config.
+        """
+        env_value = os.environ.get("AGENTIC_RUN_IN_CURRENT_WORKTREE", "").strip().lower()
+        if env_value:
+            return env_value in {"1", "true", "yes", "on"}
+        return bool(self.config.get("branching", {}).get("run_tasks_in_current_worktree", False))
+
     def create_final_pr_from_spec_branch_enabled(self) -> bool:
         return bool(self.config.get("branching", {}).get("create_final_pr_from_spec_branch", False))
 
@@ -939,12 +1027,18 @@ class AgenticSDLC:
         max_tasks = int(self.config["execution"].get("max_tasks_per_spec", 8))
         blocked = 0
         completed = 0
+        completed_task_ids = {
+            task.task_id
+            for task in tasks
+            if self.push_tasks_to_source_spec_branch() and self.task_completed_in_source_branch(spec, task)
+        }
         for task in tasks[:max_tasks]:
-            result = self.run_task_pipeline(spec, task, story_dir, mode=mode)
+            result = self.run_task_pipeline(spec, task, story_dir, mode=mode, completed_task_ids=completed_task_ids)
             if result == "blocked":
                 blocked += 1
             else:
                 completed += 1
+                completed_task_ids.add(task.task_id)
             if self.push_tasks_to_source_spec_branch():
                 self.refresh_source_branch_ref(spec.branch)
         if self.push_tasks_to_source_spec_branch() and completed > 0 and blocked == 0:
@@ -955,6 +1049,11 @@ class AgenticSDLC:
 
     def plan_tasks(self, spec: SpecCandidate, story_dir: Path, mode: str) -> List[AgentTask]:
         plan_path = story_dir / "plan.json"
+        deterministic = self.plan_tasks_from_task_list(spec)
+        if deterministic:
+            write_json(plan_path, {"tasks": [task.__dict__ for task in deterministic], "source": "task_list_progress"})
+            self.write_agent_log(story_dir, "spec-task-splitter", "local_plan_created", "completed", f"Created {len(deterministic)} tasks from task-list progress")
+            return deterministic
         prompt = self.render_prompt(
             agent_file=self.config["agents"].get("planning", "spec-task-splitter.agent.md"),
             title="Split this spec into one-responsibility agent tasks",
@@ -1019,6 +1118,300 @@ class AgenticSDLC:
         write_json(plan_path, {"tasks": [task.__dict__ for task in fallback], "fallback": True})
         self.write_agent_log(story_dir, "spec-task-splitter", "fallback_plan_created", "completed", "Created fallback plan because no valid plan.json was produced")
         return fallback
+
+    def split_task_progress_items(self, spec: SpecCandidate) -> List[Tuple[bool, str, str]]:
+        progress = section_text(spec.content, ["agentic split task progress", "split task progress"])
+        if not progress.strip():
+            return []
+        items: List[Tuple[bool, str, str]] = []
+        for raw_line in progress.splitlines():
+            match = re.match(r"^\s*[-*]\s+\[([ xX])\]\s+(.+?)\s*$", raw_line)
+            if not match:
+                continue
+            checked = match.group(1).lower() == "x"
+            text = match.group(2).strip()
+            code = re.search(r"`([^`]+)`", text)
+            if code:
+                task_id = safe_slug(code.group(1), 48)
+                title = text[code.end():].strip(" -:\t") or task_id.replace("-", " ").title()
+            else:
+                task_id = safe_slug(text, 48)
+                title = text
+            items.append((checked, task_id, title))
+        return items
+
+    def completed_split_task_ids_from_text(self, text: str) -> set[str]:
+        ids: set[str] = set()
+        for pattern in (
+            r"Completed task id:\s*`([^`]+)`",
+            r"Task id:\s*`([^`]+)`",
+        ):
+            for match in re.finditer(pattern, text, re.I):
+                ids.add(safe_slug(match.group(1), 48))
+        progress = section_text(text, ["agentic split task progress", "split task progress"])
+        for raw_line in progress.splitlines():
+            match = re.match(r"^\s*[-*]\s+\[([ xX])\]\s+(.+?)\s*$", raw_line)
+            if not match or match.group(1).lower() != "x":
+                continue
+            code = re.search(r"`([^`]+)`", match.group(2))
+            ids.add(safe_slug(code.group(1) if code else match.group(2), 48))
+        return ids
+
+    def is_worker_wrapper_task_list(self, spec: SpecCandidate) -> bool:
+        front_matter, _ = parse_front_matter_simple(spec.content)
+        if normalize_spec_status(front_matter.get("doc_type", "")) != "task_list":
+            return False
+        markers = " ".join(
+            [
+                spec.path,
+                front_matter.get("title", ""),
+                front_matter.get("source_trd", ""),
+                spec.title,
+            ]
+        ).lower()
+        return (
+            "worker-wrapper-artifacts" in markers
+            or "worker wrapper and artifact contract" in markers
+        )
+
+    def canonical_worker_wrapper_split_items(self, spec: SpecCandidate) -> List[Tuple[bool, str, str]]:
+        if not self.is_worker_wrapper_task_list(spec):
+            return []
+        checked_ids = self.completed_split_task_ids_from_text(spec.content)
+        canonical = [
+            ("worker-wrapper-design-gate", "Clarify worker wrapper design"),
+            ("artifact-manifest-contract", "Add artifact manifest contract"),
+            ("worker-wrapper-cli", "Add wrapper CLI"),
+            ("cdp-security-runtime-guard", "Guard CDP exposure"),
+            ("local-fixture-worker-mode", "Add local fixture worker mode"),
+            ("container-entrypoint-alignment", "Align container entrypoint"),
+            ("worker-wrapper-qa-evidence", "Validate wrapper evidence"),
+            ("worker-wrapper-pm-pr-notice", "Prepare PM PR notice"),
+        ]
+        return [(task_id in checked_ids, task_id, title) for task_id, title in canonical]
+
+    def plan_tasks_from_task_list(self, spec: SpecCandidate) -> List[AgentTask]:
+        """Create a deterministic plan when a task-list can be split locally."""
+        items = self.canonical_worker_wrapper_split_items(spec) or self.split_task_progress_items(spec)
+        if not items:
+            return []
+        tasks: List[AgentTask] = []
+        previous_id: Optional[str] = None
+        for checked, task_id, title in items:
+            depends = [previous_id] if previous_id else []
+            previous_id = task_id
+            if checked:
+                continue
+            tasks.append(self.agent_task_from_split_item(spec, task_id, title, depends))
+        return tasks
+
+    def agent_task_from_split_item(self, spec: SpecCandidate, task_id: str, title: str, depends_on: List[str]) -> AgentTask:
+        blueprint = self.worker_wrapper_task_blueprint(task_id)
+        if blueprint:
+            return AgentTask(
+                task_id=task_id,
+                title=blueprint["title"],
+                responsibility=blueprint["responsibility"],
+                domain=blueprint["domain"],
+                layer=blueprint["layer"],
+                depends_on=depends_on,
+                acceptance_criteria=list(blueprint["acceptance_criteria"]),
+                risk=blueprint.get("risk", "medium"),
+                requires_local=bool(blueprint.get("requires_local", True)),
+                requires_cloud=bool(blueprint.get("requires_cloud", False)),
+                requires_terraform=bool(blueprint.get("requires_terraform", False)),
+                requires_screenshots=bool(blueprint.get("requires_screenshots", False)),
+                requires_e2e=bool(blueprint.get("requires_e2e", False)),
+                expected_paths=list(blueprint.get("expected_paths", [])),
+            )
+
+        lowered = f"{task_id} {title}".lower()
+        domain = "fullstack"
+        layer = "crosscutting"
+        requires_screenshots = False
+        requires_e2e = False
+        requires_terraform = False
+        if any(word in lowered for word in ["database", "db", "data model", "manifest", "artifact"]):
+            domain, layer = "database", "database"
+        if any(word in lowered for word in ["api", "backend", "python", "wrapper", "cli"]):
+            domain, layer = "backend", "api"
+        if any(word in lowered for word in ["frontend", "react", "ui", "page", "screen"]):
+            domain, layer = "frontend", "frontend"
+            requires_screenshots = True
+            requires_e2e = True
+        if any(word in lowered for word in ["cloud", "container", "docker", "terraform", "aws", "entrypoint"]):
+            domain, layer = "cloud", "cloud"
+            requires_terraform = "terraform" in lowered
+        if any(word in lowered for word in ["security", "cdp"]):
+            domain, layer = "security", "crosscutting"
+        if "qa" in lowered:
+            domain, layer = "qa", "qa"
+        if any(word in lowered for word in ["pm", "product", "notice", "pr-notice"]):
+            domain, layer = "pm", "pm"
+
+        return AgentTask(
+            task_id=task_id,
+            title=title,
+            responsibility=f"Complete the split task `{task_id}` with one responsibility and repo-native tests/evidence.",
+            domain=domain,
+            layer=layer,
+            depends_on=depends_on,
+            acceptance_criteria=[
+                f"`{task_id}` satisfies its mapped requirements in the task list.",
+                "Relevant tests or explicit blocker evidence are recorded.",
+                "QA and PM evidence accurately reflect pass, blocked, or not-applicable status.",
+            ],
+            risk="medium",
+            requires_local=True,
+            requires_terraform=requires_terraform,
+            requires_screenshots=requires_screenshots,
+            requires_e2e=requires_e2e,
+            expected_paths=self.extract_expected_paths_from_spec(spec),
+        )
+
+    def worker_wrapper_task_blueprint(self, task_id: str) -> Dict[str, Any]:
+        blueprints: Dict[str, Dict[str, Any]] = {
+            "artifact-manifest-contract": {
+                "title": "Add artifact manifest contract",
+                "responsibility": "Define and test the local artifact manifest data shape and attempt-specific output path rules without adding persistent database schema.",
+                "domain": "backend",
+                "layer": "database",
+                "acceptance_criteria": [
+                    "Manifest builder records batch_id, target_id, attempt, run_id, local_run_dir, output_s3_prefix, status, metrics_path, quality_report_path, clean_records_path, rejected_records_path, diagnostics_paths, and required result artifact paths.",
+                    "Manifest path construction preserves attempt identity and cannot overwrite prior attempts for the same batch_id and target_id.",
+                    "Artifact discovery covers config.json, status.txt, metrics.json, quality_report.md, properties_master_clean.jsonl, rejected_records.jsonl, quality_flags.csv, domain_diagnostics.csv, image_diagnostics.csv, and results/** when present.",
+                    "Unit or contract tests validate manifest generation, required and missing artifact handling, and output prefix construction using local fixtures only.",
+                    "Layer-gate evidence states that no migration, DynamoDB table, S3 bucket, AWS resource, or Terraform change is created by this task.",
+                ],
+                "expected_paths": [
+                    "city_pipelines/cloud/__init__.py",
+                    "city_pipelines/cloud/artifacts.py",
+                    "city_pipelines/cloud/tests/test_artifact_manifest_contract.py",
+                    "city_pipelines/cloud/tests/fixtures/artifact_run/",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/layer-gates/database.md",
+                ],
+            },
+            "worker-wrapper-cli": {
+                "title": "Add wrapper CLI",
+                "responsibility": "Implement the cloud-safe worker CLI and environment parsing that invokes city_pipelines/run_city.py without changing local pipeline semantics.",
+                "domain": "backend",
+                "layer": "api",
+                "acceptance_criteria": [
+                    "Wrapper reads BATCH_ID, TARGET_ID, CONFIG_S3_URI, OUTPUT_S3_PREFIX, ATTEMPT, AWS_REGION, egress mode, and dry-run/local options from environment variables or explicit CLI flags with deterministic precedence.",
+                    "Wrapper invokes the existing city_pipelines/run_city.py path with --mode headless and --stop-chrome for real worker execution while keeping direct local run_city.py usage available.",
+                    "Wrapper emits structured JSON logs containing batch_id, target_id, attempt, region, egress_mode, run_id, local_run_dir, artifact manifest path, and artifact paths.",
+                    "Wrapper maps unrecoverable worker failures to a non-zero exit code and machine-readable failure reason without hiding subprocess errors.",
+                    "Unit tests cover environment parsing, CLI flag overrides, run_city command construction, structured log fields, and failure reason mapping without requiring AWS credentials.",
+                ],
+                "expected_paths": [
+                    "city_pipelines/cloud/config.py",
+                    "city_pipelines/cloud/logging.py",
+                    "city_pipelines/cloud/worker.py",
+                    "city_pipelines/cloud/tests/test_worker_wrapper_cli.py",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/layer-gates/api.md",
+                ],
+            },
+            "cdp-security-runtime-guard": {
+                "title": "Guard CDP exposure",
+                "responsibility": "Verify and, if needed, harden the worker runtime so Chrome/CDP is not publicly exposed in the cloud wrapper path.",
+                "domain": "security",
+                "layer": "crosscutting",
+                "acceptance_criteria": [
+                    "Security evidence inspects city_pipelines/common/pipeline.py, city_pipelines/common/scripts/**, the wrapper command path, and Dockerfile.city-pipeline for CDP binding or exposed-port behavior.",
+                    "If implementation changes are needed, the cloud wrapper path binds CDP to a non-public interface or documents why container networking keeps it non-public without changing existing local run semantics.",
+                    "Tests or static assertions cover the effective Chrome/CDP command or wrapper guard for the cloud execution path.",
+                    "Evidence confirms Dockerfile.city-pipeline does not expose a public CDP port and no new public port mapping is introduced.",
+                    "Rollback guidance is recorded for any security hardening changes and compatibility with --mode headless --stop-chrome is preserved.",
+                ],
+                "expected_paths": [
+                    "city_pipelines/cloud/security.py",
+                    "city_pipelines/cloud/tests/test_cdp_security_runtime_guard.py",
+                    "city_pipelines/common/pipeline.py",
+                    "city_pipelines/common/scripts/",
+                    "Dockerfile.city-pipeline",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/security-review.md",
+                ],
+            },
+            "local-fixture-worker-mode": {
+                "title": "Add local fixture worker mode",
+                "responsibility": "Add the local fixture or dry-run-compatible worker mode and tests that produce a manifest without AWS credentials or real S3 calls.",
+                "domain": "backend",
+                "layer": "api",
+                "requires_e2e": True,
+                "acceptance_criteria": [
+                    "Local fixture mode can run from CLI flags or environment variables without AWS credentials and without network calls to S3.",
+                    "Fixture execution stages or reuses a local config, creates an attempt-specific local output identity, and writes an artifact manifest using the manifest contract.",
+                    "Tests verify local fixture behavior, missing fixture/config failures, manifest content, structured logs, and no-AWS adapter behavior.",
+                    "Evidence includes at least one generated artifact manifest example under the P0-F1-T1 evidence path.",
+                    "Any gap in full Docker smoke feasibility is documented with the exact command a later QA task should run.",
+                ],
+                "expected_paths": [
+                    "city_pipelines/cloud/local_adapter.py",
+                    "city_pipelines/cloud/tests/test_local_fixture_worker_mode.py",
+                    "city_pipelines/cloud/tests/fixtures/worker_config/",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/artifact-manifest-example.json",
+                ],
+            },
+            "container-entrypoint-alignment": {
+                "title": "Align container entrypoint",
+                "responsibility": "Update or document the container entrypoint path only as needed so AWS Batch can call the wrapper while direct local worker behavior remains available.",
+                "domain": "cloud",
+                "layer": "cloud",
+                "requires_e2e": True,
+                "acceptance_criteria": [
+                    "Dockerfile.city-pipeline is inspected after the wrapper exists and either updated to expose the wrapper command or evidence records the exact Batch command override that should be used instead.",
+                    "Any Dockerfile or dependency change is limited to worker entrypoint/runtime needs and does not introduce Terraform, AWS resources, production deployment, or broad package churn.",
+                    "Container-level validation evidence includes a local Docker smoke command when feasible, or a documented blocker/gap with a manual verification command.",
+                    "The task confirms no public CDP port is exposed by the container image and no P0 NAT/proxy/external-provider behavior is introduced.",
+                    "Rollback notes explain how to return to the previous direct run_city.py entrypoint or command override.",
+                ],
+                "expected_paths": [
+                    "Dockerfile.city-pipeline",
+                    "requirements-city-pipeline.txt",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/docker-smoke.md",
+                ],
+            },
+            "worker-wrapper-qa-evidence": {
+                "title": "Validate wrapper evidence",
+                "responsibility": "Run layered validation and collect QA evidence showing each FR, NFR, and AC is satisfied or explicitly documented as a gap.",
+                "domain": "qa",
+                "layer": "qa",
+                "risk": "low",
+                "requires_e2e": True,
+                "acceptance_criteria": [
+                    "test-evidence.md records spec-quality, test-matrix, targeted unit tests, local fixture or dry-run smoke, and Docker smoke results when feasible.",
+                    "qa-checklist.md maps FR-001 through FR-005, NFR-REL-001, NFR-SEC-001, AC-001, AC-002, and AC-003 to concrete validation evidence or an explicit gap.",
+                    "QA evidence confirms frontend visual and accessibility testing are non-applicable because this task has no UI.",
+                    "QA evidence confirms Terraform plan/apply, real AWS S3, DynamoDB, Batch, and production deployment are non-applicable or blocked for this task.",
+                    "Self-review and scale/security architecture review outputs are captured and any in-scope findings are routed back to the responsible implementation task before QA passes.",
+                ],
+                "expected_paths": [
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/agents.log.md",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/qa-checklist.md",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/scale-security-architecture-review.md",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/test-evidence.md",
+                ],
+            },
+            "worker-wrapper-pm-pr-notice": {
+                "title": "Prepare PM PR notice",
+                "responsibility": "Prepare the PM acceptance checklist and PR notification for the worker wrapper/artifact contract without requesting approval before the Codex review gate.",
+                "domain": "pm",
+                "layer": "pm",
+                "risk": "low",
+                "acceptance_criteria": [
+                    "pm-checklist.md verifies the business outcome: the worker can be tested locally, has a cloud-style CLI/environment contract, produces complete attempt-specific artifact evidence, and preserves local pipeline behavior.",
+                    "pr-notification.md includes scope, why it changed, validation, risk, rollback plan, assumptions, follow-ups, quality score, files worth review, and links to P0-F1-T1 evidence.",
+                    "PR notification explicitly states that no AWS infrastructure, Terraform, production deploy, persistent database schema, HTTP API, or frontend UI was changed.",
+                    "PR notification records that human manager approval must wait for the required Agentic Codex PR Review / codex_review_gate status check.",
+                    "PM evidence records any unresolved gaps from local Docker smoke or real AWS validation as follow-up items rather than marking cloud integration complete.",
+                ],
+                "expected_paths": [
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/pm-checklist.md",
+                    "docs/agentic-evidence/SPEC-20260519-city-pipeline-aws-cost-mvp/P0-F1-T1/pr-notification.md",
+                ],
+            },
+        }
+        return blueprints.get(task_id, {})
 
     def parse_tasks(self, data: Dict[str, Any]) -> List[AgentTask]:
         raw_tasks = data.get("tasks", []) if isinstance(data, dict) else []
@@ -1113,8 +1506,33 @@ class AgenticSDLC:
     def order_tasks_by_layer(self, tasks: List[AgentTask]) -> List[AgentTask]:
         configured = self.config.get("layer_gates", {}).get("order", [])
         order = {name: idx for idx, name in enumerate(configured)}
-        # Ensure backend/API work is not started before database, and frontend is not started before API.
-        return sorted(tasks, key=lambda t: (order.get(self.task_layer(t), 50), t.task_id))
+        original_index = {task.task_id: index for index, task in enumerate(tasks)}
+
+        def rank(task: AgentTask) -> Tuple[int, int, str]:
+            return (order.get(self.task_layer(task), 50), original_index.get(task.task_id, 9999), task.task_id)
+
+        # Explicit task dependencies are stronger than broad layer ordering.
+        # Use layer order only as a tie-breaker among currently ready tasks.
+        remaining = list(tasks)
+        ordered: List[AgentTask] = []
+        remaining_ids = {task.task_id for task in remaining}
+        while remaining:
+            ready = [
+                task for task in remaining
+                if all(dep not in remaining_ids for dep in task.depends_on)
+            ]
+            if not ready:
+                # Cycles or unknown dependency ids should not make planning
+                # nondeterministic. Keep the remaining layer order; the runtime
+                # dependency preflight will block unsafe tasks before agents run.
+                ordered.extend(sorted(remaining, key=rank))
+                break
+            ready.sort(key=rank)
+            for task in ready:
+                ordered.append(task)
+                remaining.remove(task)
+                remaining_ids.remove(task.task_id)
+        return ordered
 
     def spec_mentions_layer(self, spec: SpecCandidate, layer: str) -> bool:
         """Infer whether the spec requires a real implementation layer.
@@ -1167,6 +1585,70 @@ class AgenticSDLC:
         # Fallback: if no generated pass files exist yet, accept explicit source-branch evidence only.
         evidence = git_output_or_empty(self.repo, "show", f"{ref}:docs/agentic-evidence/{spec.id}/layer-gates/{layer}.passed.md")
         return bool(evidence.strip() and "PASS" in evidence.upper())
+
+    def task_completion_path_for_id(self, spec: SpecCandidate, task_id: str) -> Path:
+        return Path(self.config["repository"].get("evidence_dir", "docs/agentic-evidence")) / spec.id / safe_slug(task_id, 48) / "task-completed.md"
+
+    def task_completed_in_source_branch_by_id(self, spec: SpecCandidate, task_id: str) -> bool:
+        """Return true when the source branch already contains a completion marker for a task id."""
+        ref = self.ref_for_branch(spec.branch)
+        rel = str(self.task_completion_path_for_id(spec, task_id)).replace("\\", "/")
+        out = git_output_or_empty(self.repo, "show", f"{ref}:{rel}")
+        return bool(out.strip())
+
+    def task_marked_completed_in_spec(self, spec: SpecCandidate, task_id: str) -> bool:
+        """Return true when the task document marks a split task as completed.
+
+        This is a compatibility bridge for older runs that changed spec content
+        before task-completion markers used stable spec ids.
+        """
+        wanted = safe_slug(task_id, 48)
+        if wanted in self.completed_split_task_ids_from_text(spec.content):
+            return True
+        for raw_line in spec.content.splitlines():
+            line = raw_line.strip()
+            if not re.match(r"^[-*]\s+\[x\]\s+", line, flags=re.I):
+                continue
+            code_ids = [safe_slug(value, 48) for value in re.findall(r"`([^`]+)`", line)]
+            if wanted in code_ids:
+                return True
+            checkbox_text = re.sub(r"^[-*]\s+\[x\]\s+", "", line, flags=re.I)
+            if wanted in safe_slug(checkbox_text, 160).split("-"):
+                return True
+            if wanted in safe_slug(checkbox_text, 160):
+                return True
+        return False
+
+    def ensure_task_dependencies_satisfied(
+        self,
+        spec: SpecCandidate,
+        task: AgentTask,
+        story_dir: Path,
+        task_dir: Path,
+        completed_task_ids: Optional[Iterable[str]] = None,
+    ) -> None:
+        completed = {safe_slug(task_id, 48) for task_id in (completed_task_ids or [])}
+        missing: List[str] = []
+        for dependency in task.depends_on:
+            dep = safe_slug(dependency, 48)
+            if dep in completed:
+                continue
+            if self.task_completed_in_source_branch_by_id(spec, dep):
+                continue
+            if self.task_marked_completed_in_spec(spec, dep):
+                continue
+            missing.append(dep)
+        if not missing:
+            if task.depends_on:
+                self.write_agent_log(story_dir, "layer-sequencing-orchestrator", "task_dependency_preflight", "completed", f"{task.task_id} dependencies satisfied: {', '.join(task.depends_on)}")
+            return
+        msg = (
+            f"Task {task.task_id} is blocked because declared task dependencies are not complete on `{spec.branch}`: "
+            + ", ".join(missing)
+            + ". Complete those earlier split tasks first; dependent tasks must not start agent implementation or evidence collection."
+        )
+        write_text(task_dir / "task-dependency-blocked.md", msg + "\n")
+        raise TaskDependencyBlocked(msg)
 
     def required_previous_layers(self, spec: SpecCandidate, task: AgentTask) -> List[str]:
         cfg = self.config.get("layer_gates", {})
@@ -1347,7 +1829,14 @@ class AgenticSDLC:
             ))
         return tasks
 
-    def run_task_pipeline(self, spec: SpecCandidate, task: AgentTask, story_dir: Path, mode: str) -> str:
+    def run_task_pipeline(
+        self,
+        spec: SpecCandidate,
+        task: AgentTask,
+        story_dir: Path,
+        mode: str,
+        completed_task_ids: Optional[Iterable[str]] = None,
+    ) -> str:
         self.log(f"  Task {task.task_id}: {task.title} [{task.domain}/{self.task_layer(task)}]")
         task_run_id = self.make_task_run_id(spec, task)
         task_dir = story_dir / "tasks" / self.task_dir_name(task)
@@ -1358,7 +1847,12 @@ class AgenticSDLC:
             self.log(f"    Skipping already completed task {task.task_id}")
             return "completed"
         try:
+            self.ensure_task_dependencies_satisfied(spec, task, story_dir, task_dir, completed_task_ids=completed_task_ids)
             self.ensure_layer_dependencies_satisfied(spec, task, story_dir, task_dir)
+        except TaskDependencyBlocked as exc:
+            self.write_agent_log(story_dir, "layer-sequencing-orchestrator", "task_blocked_dependency", "blocked", str(exc))
+            self.log(f"    Task dependency blocked {task.task_id}; earlier split tasks must complete first.")
+            return "blocked"
         except LayerDependencyBlocked as exc:
             self.write_agent_log(story_dir, "layer-sequencing-orchestrator", "task_blocked_layer_dependency", "blocked", str(exc))
             self.log(f"    Layer dependency blocked task {task.task_id}; watcher will retry after previous layer PR is merged/passed.")
@@ -1396,6 +1890,20 @@ class AgenticSDLC:
         branch_prefix = self.config.get("branching", {}).get("implementation_branch_prefix", "ai")
         branch = f"{branch_prefix}/{safe_slug(spec.title, 32)}/{safe_slug(task.task_id, 48)}"
         worktree = self.worktree_dir / safe_slug(run_id, 90)
+        if self.run_tasks_in_current_worktree():
+            if self.dry_run:
+                self.log(f"    DRY-RUN would use current worktree {self.repo} for task {task.task_id}")
+                return self.repo
+            current_branch = git_output_or_empty(self.repo, "rev-parse", "--abbrev-ref", "HEAD")
+            if self.push_tasks_to_source_spec_branch() and current_branch != spec.branch:
+                raise OrchestratorError(
+                    "Current-worktree source-spec mode requires the checkout branch to match "
+                    f"the spec branch. Current branch is {current_branch!r}; spec branch is {spec.branch!r}."
+                )
+            self.normalize_runtime_shell_scripts(self.repo)
+            self.ensure_runtime_excludes(self.repo)
+            self.log(f"    Using current worktree {self.repo}")
+            return self.repo
         if self.push_tasks_to_source_spec_branch():
             if self.dry_run:
                 self.log(f"    DRY-RUN would create detached worktree from {base_ref} and push task commit back to source branch {spec.branch}")
@@ -1406,6 +1914,7 @@ class AgenticSDLC:
                     shutil.rmtree(worktree)
             worktree.parent.mkdir(parents=True, exist_ok=True)
             git(self.repo, "worktree", "add", "--detach", "--force", str(worktree), base_commit)
+            self.normalize_runtime_shell_scripts(worktree)
             self.ensure_runtime_excludes(worktree)
             return worktree
         if self.dry_run:
@@ -1427,8 +1936,18 @@ class AgenticSDLC:
         if existing_local or existing_remote:
             branch = f"{branch}-{short_sha(run_id, 6)}"
         git(worktree, "switch", "-c", branch)
+        self.normalize_runtime_shell_scripts(worktree)
         self.ensure_runtime_excludes(worktree)
         return worktree
+
+    def normalize_runtime_shell_scripts(self, worktree: Path) -> None:
+        normalized = normalize_shell_script_line_endings(worktree)
+        if normalized:
+            git(worktree, "update-index", "--refresh", "--", *normalized, check=False)
+            shown = ", ".join(normalized[:5])
+            if len(normalized) > 5:
+                shown += f", +{len(normalized) - 5} more"
+            self.log(f"    Normalized LF line endings for shell scripts: {shown}")
 
     def ensure_runtime_excludes(self, worktree: Path) -> None:
         """Keep agent runtime artifacts out of Git even when the repo has no .gitignore."""
@@ -1559,6 +2078,12 @@ class AgenticSDLC:
 
             Required behavior:
             - Read AGENTS.md and the specialized agent file carefully.
+            - Runtime portability is part of the task. Detect the current OS before running shell commands.
+            - On Windows, do not assume WSL/Bash exists. Prefer PowerShell-compatible commands, Python scripts, and `python -m ...` invocations. If Bash/WSL is unavailable, record that as an environment gap and continue with Windows-native validation.
+            - If `rg` is unavailable, use `git grep`, `findstr`, PowerShell `Get-ChildItem`/`Select-String`, or a short Python read-only search instead of failing the task.
+            - If `pytest` is unavailable, use `python -m unittest` for Python tests unless this repo explicitly requires pytest.
+            - If an import dependency such as `requests` is missing, run the repo bootstrap or install the repo requirements into the task-scoped environment before classifying the code as broken.
+            - Docker daemon, credentials, WSL, or local package-manager failures are environment blockers unless the acceptance criteria require changing repo code to fix them.
             - This repo may run in source-spec-branch mode. When enabled, the validated task is committed to the same branch that contains the spec, and a final PR is created from that branch to the base branch.
             - Continue progress when clarification is needed by doing safe discovery, tests, fixtures, and documentation.
             - Do not guess on high-risk decisions: auth, security, billing, payments, migrations, production config, destructive data operations, public API contracts, cross-repo contracts.
@@ -1641,6 +2166,29 @@ class AgenticSDLC:
         expected = str(codex_cfg.get("cloud_opt_in_value", "true")).lower()
         return os.environ.get(env_var, "").strip().lower() == expected
 
+    def codex_sandbox(self, allow_write: bool) -> str:
+        """Return the sandbox used for nested Codex agents.
+
+        Agentic SDLC agents are already launched inside task-scoped Git
+        worktrees. On Windows, forcing early read-only stages into the Codex
+        read-only sandbox blocks ordinary inspection commands such as
+        PowerShell `Get-ChildItem`. Use the configured sandbox for every stage
+        so requirements/design agents have the same local access as
+        implementation agents.
+        """
+        env_sandbox = os.environ.get("AGENTIC_CODEX_SANDBOX", "").strip()
+        if env_sandbox:
+            return env_sandbox
+        if bool(self.config["codex"].get("full_access_agents", True)):
+            return "danger-full-access"
+        return str(self.config["codex"].get("sandbox", "danger-full-access"))
+
+    def codex_approval_policy(self) -> str:
+        env_policy = os.environ.get("AGENTIC_CODEX_APPROVAL_POLICY", "").strip()
+        if env_policy:
+            return env_policy
+        return str(self.config["codex"].get("approval_policy", "never"))
+
     def call_codex(self, prompt: str, cwd: Path, run_dir: Path, agent: str, mode: str, allow_write: bool) -> None:
         run_dir.mkdir(parents=True, exist_ok=True)
         configured_codex_bin = self.config["codex"].get("binary", "codex")
@@ -1663,14 +2211,18 @@ class AgenticSDLC:
                 self.log(f"        Codex binary missing; prompt saved for {agent}")
                 return
             raise OrchestratorError(f"Codex binary not found: {configured_codex_bin}. Install Codex CLI, run with --dry-run, or set codex.allow_missing_codex=true only for prompt-generation workflows.")
-        sandbox = self.config["codex"].get("sandbox", "workspace-write") if allow_write else "read-only"
+        sandbox = self.codex_sandbox(allow_write)
+        approval_policy = self.codex_approval_policy()
         model_env = self.config["codex"].get("model_env_var", "AGENTIC_CODEX_MODEL")
         reasoning_env = self.config["codex"].get("reasoning_effort_env_var", "AGENTIC_CODEX_REASONING_EFFORT")
         model = os.environ.get(model_env) or self.config["codex"].get("model", "gpt-5.5")
         reasoning_effort = os.environ.get(reasoning_env) or self.config["codex"].get("model_reasoning_effort") or self.config["codex"].get("reasoning_effort", "xhigh")
         reasoning_summary = self.config["codex"].get("reasoning_summary", "concise")
         verbosity = self.config["codex"].get("verbosity", "high")
-        cmd = [codex_bin, "exec"]
+        cmd = [codex_bin]
+        if approval_policy:
+            cmd.extend(["--ask-for-approval", approval_policy])
+        cmd.append("exec")
         json_events = bool(self.config["codex"].get("json_events", True))
         if json_events:
             cmd.append("--json")
@@ -2062,14 +2614,14 @@ Revert this PR. No production deployment should occur without release gate appro
         ])
         for pattern in cfg.get("ignore_patterns", []):
             cmd.extend(["--ignore-pattern", str(pattern)])
-        expected_paths = list(task.expected_paths or [])
+        expected_paths = self.task_change_scopes(spec, task) if self.run_tasks_in_current_worktree() else list(task.expected_paths or [])
         if phase == "preflight":
             if expected_paths:
                 for path in expected_paths:
                     cmd.extend(["--path", str(path)])
             else:
                 cmd.append("--allow-empty-intent")
-            if expected_paths and bool(cfg.get("write_path_leases", True)) and not self.dry_run:
+            if expected_paths and bool(cfg.get("write_path_leases", True)) and not self.dry_run and not self.run_tasks_in_current_worktree():
                 cmd.append("--write-lease")
                 cmd.extend(["--task-id", task.task_id, "--story-id", spec.id])
                 if bool(cfg.get("commit_path_leases", True)):
@@ -2077,7 +2629,11 @@ Revert this PR. No production deployment should occur without release gate appro
                 if bool(cfg.get("push_path_leases", False)):
                     cmd.append("--push-lease")
         else:
-            cmd.append("--current-diff")
+            if self.run_tasks_in_current_worktree() and expected_paths:
+                for path in expected_paths:
+                    cmd.extend(["--path", str(path)])
+            else:
+                cmd.append("--current-diff")
         if self.dry_run:
             self.log(f"    DRY-RUN would run {' '.join(cmd)}")
             return True
@@ -2106,7 +2662,9 @@ Revert this PR. No production deployment should occur without release gate appro
                 if self.dry_run:
                     self.log(f"    DRY-RUN would run {' '.join(cmd)}")
                 else:
-                    env = {}
+                    env = {
+                        "AGENTIC_SCOPE_PATHS_JSON": json.dumps(self.task_change_scopes(spec, task)),
+                    }
                     if script.name == "pr_guardrails.py" and self.push_tasks_to_source_spec_branch():
                         # Source-spec-branch mode commits validated evidence and
                         # task markers back to the integration branch; the final
@@ -2120,6 +2678,25 @@ Revert this PR. No production deployment should occur without release gate appro
 
     def task_completion_path(self, spec: SpecCandidate, task: AgentTask) -> Path:
         return Path(self.config["repository"].get("evidence_dir", "docs/agentic-evidence")) / spec.id / task.task_id / "task-completed.md"
+
+    def task_change_scopes(self, spec: SpecCandidate, task: AgentTask) -> List[str]:
+        """Paths this task is allowed to stage/check in current-worktree mode."""
+        evidence_root = Path(self.config["repository"].get("evidence_dir", "docs/agentic-evidence"))
+        layer_gate_dir = Path(
+            self.config.get("layer_gates", {})
+            .get("pass_file_dir", "docs/agentic-evidence/{spec_id}/layer-gates")
+            .format(spec_id=spec.id)
+        )
+        scopes: List[str] = []
+        scopes.extend(str(path) for path in (task.expected_paths or []))
+        scopes.extend([
+            str(evidence_root / spec.id / task.task_id),
+            str(self.task_completion_path(spec, task)),
+            str(layer_gate_dir),
+            spec.path,
+        ])
+        normalized = {str(scope).replace("\\", "/").strip("/") for scope in scopes if str(scope).strip()}
+        return sorted(normalized)
 
     def task_completed_in_source_branch(self, spec: SpecCandidate, task: AgentTask) -> bool:
         """Return true when a previous run committed the task completion marker.
@@ -2155,7 +2732,8 @@ Revert this PR. No production deployment should occur without release gate appro
                         out.append(f"updated_at: \"{timestamp[:10]}\"")
                         seen_updated = True
                     elif re.match(r"^\s*completed_at\s*:", line):
-                        out.append(f"completed_at: \"{timestamp}\"")
+                        if status == "completed":
+                            out.append(f"completed_at: \"{timestamp}\"")
                         seen_completed = True
                     else:
                         out.append(line)
@@ -2173,9 +2751,52 @@ Revert this PR. No production deployment should occur without release gate appro
         header += "---\n\n"
         return header + text
 
-    def mark_markdown_checkboxes_done(self, text: str) -> str:
-        """Mark task-list checkboxes complete while preserving indentation."""
-        return re.sub(r"(?m)^(\s*[-*]\s+)\[\s\](\s+)", r"\1[x]\2", text)
+    def mark_task_progress_checkbox_done(self, text: str, task: AgentTask) -> str:
+        """Mark only the executed split-task checkbox complete.
+
+        The task-list document can contain many implementation checkboxes. A
+        single split-task commit must never mark the whole spec done.
+        """
+        task_id = safe_slug(task.task_id, 48)
+        lines = text.splitlines()
+        found = False
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if not re.match(r"^[-*]\s+\[\s\]\s+", stripped):
+                continue
+            code_ids = [safe_slug(value, 48) for value in re.findall(r"`([^`]+)`", stripped)]
+            checkbox_text = re.sub(r"^[-*]\s+\[\s\]\s+", "", stripped)
+            if task_id in code_ids or task_id in safe_slug(checkbox_text, 160):
+                lines[index] = re.sub(r"\[\s\]", "[x]", line, count=1)
+                found = True
+        updated = "\n".join(lines)
+        if text.endswith("\n"):
+            updated += "\n"
+        if found:
+            return updated
+        progress_line = f"- [x] `{task.task_id}` - {task.title}"
+        heading = "## Agentic Split Task Progress"
+        if heading in updated:
+            return updated.rstrip() + f"\n{progress_line}\n"
+        if self.worker_wrapper_task_blueprint(task_id):
+            checked_ids = self.completed_split_task_ids_from_text(updated)
+            checked_ids.add(task_id)
+            canonical = [
+                ("worker-wrapper-design-gate", "Clarify worker wrapper design"),
+                ("artifact-manifest-contract", "Add artifact manifest contract"),
+                ("worker-wrapper-cli", "Add wrapper CLI"),
+                ("cdp-security-runtime-guard", "Guard CDP exposure"),
+                ("local-fixture-worker-mode", "Add local fixture worker mode"),
+                ("container-entrypoint-alignment", "Align container entrypoint"),
+                ("worker-wrapper-qa-evidence", "Validate wrapper evidence"),
+                ("worker-wrapper-pm-pr-notice", "Prepare PM PR notice"),
+            ]
+            lines = [heading, ""]
+            for split_id, title in canonical:
+                mark = "x" if split_id in checked_ids else " "
+                lines.append(f"- [{mark}] `{split_id}` - {title}")
+            return updated.rstrip() + "\n\n" + "\n".join(lines) + "\n"
+        return updated.rstrip() + f"\n\n{heading}\n\n{progress_line}\n"
 
     def mark_task_spec_completed(self, worktree: Path, spec: SpecCandidate, task: AgentTask, mode: str) -> None:
         """Mark the executed task spec as completed so agents skip it later.
@@ -2194,8 +2815,9 @@ Revert this PR. No production deployment should occur without release gate appro
             return
         original = spec_path.read_text(encoding="utf-8", errors="replace")
         timestamp = now_utc()
-        updated = self.update_front_matter_status(original, "completed", completed_at=timestamp)
-        updated = self.mark_markdown_checkboxes_done(updated)
+        next_status = spec.status if normalize_spec_status(spec.status or "") not in {"completed", "done"} else "ready_for_agents"
+        updated = self.update_front_matter_status(original, next_status or "ready_for_agents")
+        updated = self.mark_task_progress_checkbox_done(updated, task)
         note = textwrap.dedent(f"""
 
         ---
@@ -2237,7 +2859,15 @@ This marker allows the POC-to-PR workflow to continue on later pushes without re
         spec branch is the integration branch and the final PR is created from that
         branch to the repository base branch.
         """
-        git(worktree, "add", "-A", "--", ".", *RUNTIME_EXCLUDE_PATHS)
+        scopes = self.task_change_scopes(spec, task) if self.run_tasks_in_current_worktree() else None
+        if scopes:
+            staged_before = git(worktree, "diff", "--cached", "--name-only")
+            if staged_before.strip():
+                raise OrchestratorError(
+                    "Current-worktree task commits require an empty Git index before staging. "
+                    "Commit, unstage, or stash existing staged files first."
+                )
+        git_add_changed_paths(worktree, scopes=scopes)
         staged = git(worktree, "diff", "--cached", "--name-only")
         if not staged.strip():
             self.write_agent_log(story_dir, "orchestrator", "nothing_staged", "completed", f"No commit for {task.task_id}; runtime artifacts were excluded")
@@ -2345,7 +2975,15 @@ Codex review is required before human approval. The PR should receive an automat
         branch = git(worktree, "rev-parse", "--abbrev-ref", "HEAD")
         title = self.pr_title(task)
         pr_body_path = self.create_pr_body(task_dir, spec, task, mode)
-        git(worktree, "add", "-A", "--", ".", *RUNTIME_EXCLUDE_PATHS)
+        scopes = self.task_change_scopes(spec, task) if self.run_tasks_in_current_worktree() else None
+        if scopes:
+            staged_before = git(worktree, "diff", "--cached", "--name-only")
+            if staged_before.strip():
+                raise OrchestratorError(
+                    "Current-worktree task PR creation requires an empty Git index before staging. "
+                    "Commit, unstage, or stash existing staged files first."
+                )
+        git_add_changed_paths(worktree, scopes=scopes)
         staged = git(worktree, "diff", "--cached", "--name-only")
         if not staged.strip():
             self.write_agent_log(story_dir, "orchestrator", "nothing_staged", "completed", f"No PR for {task.task_id}; runtime artifacts were excluded")
