@@ -721,7 +721,10 @@ class AgenticSDLC:
         for spec in found:
             seen_key = self.registry_key(spec)
             registry_status = "new" if seen_key not in self.registry.get("seen", {}) else "seen"
-            if self.is_spec_ready(spec):
+            normalized_status = normalize_spec_status(spec.status or "")
+            if normalized_status == "completed":
+                readiness = "completed"
+            elif self.is_spec_ready(spec):
                 readiness = "ready" if self.validate_spec_candidate(spec) else "not-ready:validation-failed"
             else:
                 readiness = f"not-ready:{spec.status or 'no-status'}"
@@ -740,7 +743,7 @@ class AgenticSDLC:
         status = normalize_spec_status(spec.status or "")
         if not status:
             return bool(cfg.get("process_specs_without_status", False))
-        blocked = {"template", "draft", "blocked", "on_hold", "hold", "paused", "clarification_needed", "needs_clarification", "cancelled", "canceled", "archived"}
+        blocked = {"template", "draft", "completed", "done", "blocked", "on_hold", "hold", "paused", "clarification_needed", "needs_clarification", "cancelled", "canceled", "archived"}
         if status in blocked:
             return False
         ready_statuses = {normalize_spec_status(str(x)) for x in cfg.get("ready_statuses", ["ready_for_agents", "ready", "approved"])}
@@ -797,7 +800,11 @@ class AgenticSDLC:
         fresh: List[SpecCandidate] = []
         for spec in specs:
             if not self.is_spec_ready(spec):
-                self.debug(f"Skipping {spec.id}: spec status is not ready ({spec.status or 'no-status'})")
+                normalized_status = normalize_spec_status(spec.status or "")
+                if normalized_status == "completed":
+                    self.debug(f"Skipping {spec.id}: spec is already completed")
+                else:
+                    self.debug(f"Skipping {spec.id}: spec status is not ready ({spec.status or 'no-status'})")
                 continue
             if not self.validate_spec_candidate(spec):
                 continue
@@ -1370,6 +1377,7 @@ class AgenticSDLC:
             self.run_guardrails(worktree, spec, task, story_dir, task_dir, mode)
             if not self.dry_run:
                 self.write_task_completion_marker(worktree, spec, task, mode)
+                self.mark_task_spec_completed(worktree, spec, task, mode)
             self.create_pr_if_changed(worktree, spec, task, story_dir, task_dir, mode)
             self.write_agent_log(story_dir, "orchestrator", "task_completed", "completed", task.task_id)
             return "completed"
@@ -2126,6 +2134,84 @@ Revert this PR. No production deployment should occur without release gate appro
         out = git_output_or_empty(self.repo, "show", f"{ref}:{rel}")
         return bool(out.strip())
 
+    def update_front_matter_status(self, text: str, status: str, completed_at: Optional[str] = None) -> str:
+        """Update simple YAML front matter status fields without external deps."""
+        timestamp = completed_at or now_utc()
+        if text.startswith("---\n"):
+            end = text.find("\n---\n", 4)
+            if end != -1:
+                raw = text[4:end]
+                body = text[end + 5:]
+                lines = raw.splitlines()
+                seen_status = False
+                seen_updated = False
+                seen_completed = False
+                out: List[str] = []
+                for line in lines:
+                    if re.match(r"^\s*status\s*:", line):
+                        out.append(f"status: {status}")
+                        seen_status = True
+                    elif re.match(r"^\s*updated_at\s*:", line):
+                        out.append(f"updated_at: \"{timestamp[:10]}\"")
+                        seen_updated = True
+                    elif re.match(r"^\s*completed_at\s*:", line):
+                        out.append(f"completed_at: \"{timestamp}\"")
+                        seen_completed = True
+                    else:
+                        out.append(line)
+                if not seen_status:
+                    out.append(f"status: {status}")
+                if not seen_updated:
+                    out.append(f"updated_at: \"{timestamp[:10]}\"")
+                if status == "completed" and not seen_completed:
+                    out.append(f"completed_at: \"{timestamp}\"")
+                return "---\n" + "\n".join(out).rstrip() + "\n---\n" + body
+        # No front matter: add one so future scans can classify it.
+        header = f"---\nstatus: {status}\nupdated_at: \"{timestamp[:10]}\"\n"
+        if status == "completed":
+            header += f"completed_at: \"{timestamp}\"\n"
+        header += "---\n\n"
+        return header + text
+
+    def mark_markdown_checkboxes_done(self, text: str) -> str:
+        """Mark task-list checkboxes complete while preserving indentation."""
+        return re.sub(r"(?m)^(\s*[-*]\s+)\[\s\](\s+)", r"\1[x]\2", text)
+
+    def mark_task_spec_completed(self, worktree: Path, spec: SpecCandidate, task: AgentTask, mode: str) -> None:
+        """Mark the executed task spec as completed so agents skip it later.
+
+        This updates the task document itself in the implementation worktree. For
+        task-branch mode, the completed task file is included in the PR. For
+        source-spec-branch mode, it is committed with the task result.
+        """
+        spec_rel = Path(spec.path)
+        spec_path = worktree / spec_rel
+        if not spec_path.exists():
+            # In unusual detached/worktree layouts, fall back to the repo copy.
+            spec_path = self.repo / spec_rel
+        if not spec_path.exists():
+            self.log(f"    Could not find task spec file to mark completed: {spec.path}")
+            return
+        original = spec_path.read_text(encoding="utf-8", errors="replace")
+        timestamp = now_utc()
+        updated = self.update_front_matter_status(original, "completed", completed_at=timestamp)
+        updated = self.mark_markdown_checkboxes_done(updated)
+        note = textwrap.dedent(f"""
+
+        ---
+
+        Task completed by agentic SDLC.
+
+        - Completed task id: `{task.task_id}`
+        - Completed task title: {task.title}
+        - Runtime mode: `{mode}`
+        - Completed at: `{timestamp}`
+        - Evidence: `docs/agentic-evidence/{spec.id}/{task.task_id}/`
+        """)
+        if "Task completed by agentic SDLC." not in updated:
+            updated = updated.rstrip() + note + "\n"
+        spec_path.write_text(updated, encoding="utf-8")
+
     def write_task_completion_marker(self, worktree: Path, spec: SpecCandidate, task: AgentTask, mode: str) -> None:
         rel = self.task_completion_path(spec, task)
         body = f"""# Task completed
@@ -2534,6 +2620,10 @@ Review / Approve / Request changes / Decide tradeoff
     def run_spec(self, branch: str, spec_path: str, mode: str, fetch: bool = True) -> int:
         self.ensure_cloud_explicit(mode)
         spec = self.get_spec_candidate(branch=branch, spec_path=spec_path, fetch=fetch)
+        normalized_status = normalize_spec_status(spec.status or "")
+        if normalized_status == "completed":
+            self.log(f"Spec is already completed; skipping: {branch}:{spec_path}")
+            return 0
         if not self.is_spec_ready(spec):
             print(f"ERROR: spec is not ready for autonomous implementation: {spec.status or 'no-status'}", file=sys.stderr)
             return 1
