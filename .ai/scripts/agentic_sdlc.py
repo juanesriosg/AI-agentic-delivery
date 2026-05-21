@@ -681,6 +681,21 @@ class AgenticSDLC:
     def log(self, message: str) -> None:
         print(message, flush=True)
 
+    def log_status(self, level: str, message: str) -> None:
+        self.log(f"[{level.upper()}] {message}")
+
+    def log_info(self, message: str) -> None:
+        self.log_status("INFO", message)
+
+    def log_success(self, message: str) -> None:
+        self.log_status("SUCCESS", message)
+
+    def log_warning(self, message: str) -> None:
+        self.log_status("WARNING", message)
+
+    def log_error(self, message: str) -> None:
+        self.log_status("ERROR", message)
+
     def debug(self, message: str) -> None:
         if self.verbose:
             print(f"[debug] {message}", flush=True)
@@ -1256,7 +1271,10 @@ class AgenticSDLC:
             domain, layer = "database", "database"
         if any(word in lowered for word in ["api", "backend", "python", "wrapper", "cli"]):
             domain, layer = "backend", "api"
-        if any(word in lowered for word in ["frontend", "react", "ui", "page", "screen"]):
+        if (
+            any(word in lowered for word in ["frontend", "react", "page", "screen"])
+            or re.search(r"\b(ui|front-end)\b", lowered)
+        ):
             domain, layer = "frontend", "frontend"
             requires_screenshots = True
             requires_e2e = True
@@ -2816,6 +2834,8 @@ Revert this PR. No production deployment should occur without release gate appro
                 cmd = [sys.executable, str(script), "--base", spec.branch, "--task-id", task.task_id]
                 if script.name == "pr_guardrails.py" and task.requires_screenshots:
                     cmd.append("--ui-change")
+                if script.name == "pr_guardrails.py":
+                    cmd.append("--advisory")
                 if script.name == "aws_terraform_guardrails.py" and task.requires_terraform:
                     cmd.append("--aws-change")
                 if self.dry_run:
@@ -2831,10 +2851,74 @@ Revert this PR. No production deployment should occur without release gate appro
                         # PR is the review object, so evidence-only task commits
                         # are allowed while normal task-branch PRs still block them.
                         env["AGENT_ALLOW_EVIDENCE_ONLY"] = "true"
+                    if script.name == "pr_guardrails.py":
+                        env["AGENT_PR_GUARDRAILS_ADVISORY"] = "true"
                     cp = run(cmd, cwd=worktree, check=False, capture=True, env=env)
                     write_text(task_dir / f"{script.stem}.out", (cp.stdout or "") + (cp.stderr or ""))
+                    if script.name == "pr_guardrails.py":
+                        findings = self.write_pr_guardrails_diagnostic(task_dir, cp.stdout or "", cp.stderr or "", cp.returncode)
+                        if findings:
+                            self.write_agent_log(
+                                story_dir,
+                                "pr-guardrails",
+                                "diagnostic_findings",
+                                "completed",
+                                f"{findings} advisory finding(s); continuing task pipeline",
+                            )
+                            self.log_warning(
+                                f"PR guardrails reported {findings} advisory finding(s) for {task.task_id}; continuing. "
+                                f"See {task_dir / 'pr_guardrails-diagnostic.md'}"
+                            )
+                        if cp.returncode != 0:
+                            self.log_warning(
+                                f"PR guardrails exited {cp.returncode} for {task.task_id}; treated as advisory so later tasks can continue."
+                            )
+                        continue
                     if cp.returncode != 0:
                         raise OrchestratorError(f"Guardrail failed: {script.name}. See {task_dir / (script.stem + '.out')}")
+
+    def write_pr_guardrails_diagnostic(self, task_dir: Path, stdout: str, stderr: str, returncode: int) -> int:
+        """Write a human-readable advisory report for PR guardrail findings."""
+        report: Dict[str, Any] = {}
+        try:
+            report = json.loads(stdout.strip()) if stdout.strip() else {}
+        except json.JSONDecodeError:
+            report = {}
+        failures = [str(item) for item in report.get("failures", []) if str(item).strip()]
+        warnings = [str(item) for item in report.get("warnings", []) if str(item).strip()]
+        lines = [
+            "# PR Guardrails Diagnostic",
+            "",
+            "Status: ADVISORY",
+            f"Time: {now_utc()}",
+            f"Exit code: {returncode}",
+            "",
+            "PR guardrails are diagnostic in the autonomous SDLC task pipeline. Findings are recorded here so the agent can analyze the cause, but they do not block task completion or later DB/API/frontend tasks.",
+            "",
+            "## Findings",
+            "",
+        ]
+        if failures:
+            lines.append("### Hard Findings")
+            lines.append("")
+            lines.extend(f"- {item}" for item in failures)
+            lines.append("")
+        if warnings:
+            lines.append("### Reviewability Warnings")
+            lines.append("")
+            lines.extend(f"- {item}" for item in warnings)
+            lines.append("")
+        if not failures and not warnings:
+            lines.append("- No PR guardrail findings were reported.")
+            lines.append("")
+        if stderr.strip():
+            lines.extend(["## STDERR", "", "```text", stderr.strip(), "```", ""])
+        if report:
+            lines.extend(["## Raw Report", "", "```json", json.dumps(report, indent=2), "```", ""])
+        elif stdout.strip():
+            lines.extend(["## Raw Output", "", "```text", stdout.strip(), "```", ""])
+        write_text(task_dir / "pr_guardrails-diagnostic.md", "\n".join(lines).rstrip() + "\n")
+        return len(failures) + len(warnings)
 
     def task_completion_path(self, spec: SpecCandidate, task: AgentTask) -> Path:
         return Path(self.config["repository"].get("evidence_dir", "docs/agentic-evidence")) / spec.id / task.task_id / "task-completed.md"

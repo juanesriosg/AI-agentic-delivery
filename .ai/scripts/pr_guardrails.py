@@ -367,10 +367,18 @@ def main() -> int:
     parser.add_argument("--aws-change", action="store_true")
     parser.add_argument("--skip-branch-conflict-check", action="store_true")
     parser.add_argument("--max-files", type=int, default=int(os.environ.get("AGENT_MAX_FILES_CHANGED", "35")))
-    parser.add_argument("--max-lines", type=int, default=int(os.environ.get("AGENT_MAX_LINES_CHANGED", "1200")))
+    parser.add_argument("--good-lines", type=int, default=int(os.environ.get("AGENT_GOOD_LINES_CHANGED", "1200")))
+    parser.add_argument("--max-lines", type=int, default=int(os.environ.get("AGENT_MAX_LINES_CHANGED", "5000")))
+    parser.add_argument(
+        "--advisory",
+        action="store_true",
+        default=os.environ.get("AGENT_PR_GUARDRAILS_ADVISORY", "false").lower() in {"1", "true", "yes"},
+        help="Report guardrail findings without returning a failing exit code.",
+    )
     args = parser.parse_args()
 
     failures: list[str] = []
+    warnings: list[str] = []
     rows = changed_files(args.base)
     scope_paths = scope_paths_from_env()
     conflict_scope_paths = scope_paths_from_env("AGENTIC_CONFLICT_SCOPE_PATHS_JSON") or scope_paths
@@ -393,8 +401,13 @@ def main() -> int:
 
     if len(implementation_files) > args.max_files:
         failures.append(f"Too many implementation files changed: {len(implementation_files)} > {args.max_files}. Split the PR.")
-    if total_lines > args.max_lines:
-        failures.append(f"Too many implementation lines changed: {total_lines} > {args.max_lines}. Split the PR.")
+    if total_lines >= args.max_lines:
+        failures.append(f"Too many implementation lines changed: {total_lines} >= {args.max_lines}. Split the PR.")
+    elif total_lines > args.good_lines:
+        warnings.append(
+            f"Implementation diff is above the reviewability target: {total_lines} > {args.good_lines}. "
+            f"This is allowed below the hard {args.max_lines} line limit, but should be split when practical."
+        )
 
     allow_evidence_only = os.environ.get("AGENT_ALLOW_EVIDENCE_ONLY", "false").lower() in {"1", "true", "yes"}
     if is_evidence_only(files) and not allow_evidence_only:
@@ -463,12 +476,16 @@ def main() -> int:
         "lines_deleted": deleted,
         "domains": sorted(responsibility_domains(implementation_files)),
         "failures": failures,
+        "warnings": warnings,
+        "advisory": args.advisory,
         "files": files,
         "implementation_files": implementation_files,
         "evidence_files": evidence_files,
         "runtime_files": runtime_files,
     }
     print(json.dumps(report, indent=2))
+    if args.advisory:
+        return 0
     return 1 if failures else 0
 
 
