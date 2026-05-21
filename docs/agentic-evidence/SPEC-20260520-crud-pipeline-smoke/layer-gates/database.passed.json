@@ -1,0 +1,8 @@
+{
+  "layer": "database",
+  "rule": "Database/data model layer needs schema/model validation and DB integration evidence.",
+  "schema": "agentic.layer-gate.v1",
+  "spec_id": "SPEC-20260520-crud-pipeline-smoke",
+  "status": "PASS",
+  "task_id": "P0-F1-T1"
+}
