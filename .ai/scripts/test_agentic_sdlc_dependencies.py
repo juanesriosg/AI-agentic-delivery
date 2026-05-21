@@ -76,8 +76,9 @@ def make_orchestrator() -> object:
             "run_tasks_in_current_worktree": False,
         },
         "execution": {
-            "analysis_agent_timeout_seconds": 180,
-            "write_agent_timeout_seconds": 900,
+            "agent_timeout_max_seconds": 7200,
+            "analysis_agent_timeout_seconds": 7200,
+            "write_agent_timeout_seconds": 7200,
             "analysis_stage_failures_block_task": False,
             "readonly_agents_in_isolated_worktree": True,
         },
@@ -276,14 +277,42 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         self.assertFalse(orchestrator.analysis_stage_failures_block_task())
         old_analysis_timeout = os.environ.pop("AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS", None)
         old_write_timeout = os.environ.pop("AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS", None)
+        old_max_timeout = os.environ.pop("AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS", None)
         try:
-            self.assertEqual(180, orchestrator.codex_stage_timeout_seconds(allow_write=False))
-            self.assertEqual(900, orchestrator.codex_stage_timeout_seconds(allow_write=True))
+            self.assertEqual(7200, orchestrator.codex_stage_timeout_seconds(allow_write=False))
+            self.assertEqual(7200, orchestrator.codex_stage_timeout_seconds(allow_write=True))
         finally:
             if old_analysis_timeout is not None:
                 os.environ["AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS"] = old_analysis_timeout
             if old_write_timeout is not None:
                 os.environ["AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS"] = old_write_timeout
+            if old_max_timeout is not None:
+                os.environ["AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS"] = old_max_timeout
+
+    def test_agent_timeouts_are_capped_at_two_hours(self) -> None:
+        orchestrator = make_orchestrator()
+        old_analysis_timeout = os.environ.get("AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS")
+        old_write_timeout = os.environ.get("AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS")
+        old_max_timeout = os.environ.get("AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS")
+        try:
+            os.environ["AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS"] = "999999"
+            os.environ["AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS"] = "999999"
+            os.environ["AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS"] = "999999"
+            self.assertEqual(7200, orchestrator.codex_stage_timeout_seconds(allow_write=False))
+            self.assertEqual(7200, orchestrator.codex_stage_timeout_seconds(allow_write=True))
+        finally:
+            if old_analysis_timeout is None:
+                os.environ.pop("AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS", None)
+            else:
+                os.environ["AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS"] = old_analysis_timeout
+            if old_write_timeout is None:
+                os.environ.pop("AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS", None)
+            else:
+                os.environ["AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS"] = old_write_timeout
+            if old_max_timeout is None:
+                os.environ.pop("AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS", None)
+            else:
+                os.environ["AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS"] = old_max_timeout
 
     def test_run_agent_sequence_continues_after_advisory_analysis_failure(self) -> None:
         orchestrator = make_orchestrator()

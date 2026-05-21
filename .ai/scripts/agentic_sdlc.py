@@ -58,6 +58,24 @@ SHELL_SCRIPT_GLOBS = (
     ".ai/scripts/**/*.sh",
 )
 ISO = "%Y-%m-%dT%H:%M:%SZ"
+DEFAULT_AGENT_TIMEOUT_SECONDS = 2 * 60 * 60
+DEFAULT_MAX_TASKS_PER_SPEC = 50
+
+LOG_LEVEL_BY_STATUS = {
+    "completed": "SUCCESS",
+    "done": "SUCCESS",
+    "passed": "SUCCESS",
+    "success": "SUCCESS",
+    "warning": "WARNING",
+    "warn": "WARNING",
+    "skipped": "WARNING",
+    "blocked": "ERROR",
+    "failed": "ERROR",
+    "failure": "ERROR",
+    "error": "ERROR",
+    "started": "INFO",
+    "running": "INFO",
+}
 
 
 class OrchestratorError(RuntimeError):
@@ -86,6 +104,23 @@ class CodexAgentTimeout(OrchestratorError):
 
 def now_utc() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime(ISO)
+
+
+def status_log_level(status: str) -> str:
+    return LOG_LEVEL_BY_STATUS.get(str(status).strip().lower(), "INFO")
+
+
+def stream_log_level(kind: str, summary: str) -> str:
+    text = summary.lower()
+    if kind == "stderr":
+        if any(token in text for token in ("error", "traceback", "failed", "failure", "exception", "timed out")):
+            return "ERROR"
+        return "WARNING"
+    if any(token in text for token in ("error", "traceback", "failed", "failure", "exception", "timed out")):
+        return "ERROR"
+    if any(token in text for token in ("warning", "warn", "blocked", "skipped")):
+        return "WARNING"
+    return "INFO"
 
 
 def run(
@@ -659,10 +694,11 @@ class AgenticSDLC:
             },
             "execution": {
                 "max_specs_per_run": 1,
-                "max_tasks_per_spec": 4,
+                "max_tasks_per_spec": DEFAULT_MAX_TASKS_PER_SPEC,
                 "retry_failed_specs": True,
-                "analysis_agent_timeout_seconds": 180,
-                "write_agent_timeout_seconds": 900,
+                "agent_timeout_max_seconds": DEFAULT_AGENT_TIMEOUT_SECONDS,
+                "analysis_agent_timeout_seconds": DEFAULT_AGENT_TIMEOUT_SECONDS,
+                "write_agent_timeout_seconds": DEFAULT_AGENT_TIMEOUT_SECONDS,
                 "analysis_stage_failures_block_task": False,
                 "readonly_agents_in_isolated_worktree": True,
             },
@@ -970,19 +1006,20 @@ class AgenticSDLC:
         candidates = self.scan(fetch=fetch)
         new = self.new_specs(candidates)
         if not new:
-            self.log("No new specs to implement.")
+            self.log_info("No new specs to implement.")
             return 0
         limit = max_specs or int(self.config["execution"].get("max_specs_per_run", 1))
         failures = 0
         for spec in new[:limit]:
             try:
-                self.implement_spec(spec, mode=mode)
+                if not self.implement_spec(spec, mode=mode):
+                    failures += 1
             except Exception as exc:
                 failures += 1
                 run_id = self.make_run_id(spec, prefix="fail")
                 if not self.dry_run:
                     self.mark_spec_seen(spec, status="failed", run_id=run_id)
-                print(f"ERROR processing {spec.id}: {exc}", file=sys.stderr)
+                print(f"[ERROR] processing {spec.id}: {exc}", file=sys.stderr)
                 if self.verbose:
                     raise
         return 1 if failures else 0
@@ -1039,7 +1076,7 @@ class AgenticSDLC:
             return task.task_id
         return compact_slug(task.task_id, prefix="t", slug_len=int(self.config.get("repository", {}).get("max_internal_slug_len", 24)), hash_len=8)
 
-    def implement_spec(self, spec: SpecCandidate, mode: str, mark_seen: bool = True) -> None:
+    def implement_spec(self, spec: SpecCandidate, mode: str, mark_seen: bool = True) -> bool:
         run_id = self.make_run_id(spec)
         story_dir = self.run_dir / run_id
         story_dir.mkdir(parents=True, exist_ok=True)
@@ -1054,13 +1091,20 @@ class AgenticSDLC:
             "started_at": now_utc(),
         })
         self.write_agent_log(story_dir, "orchestrator", "spec_detected", "started", f"Detected spec {spec.path} in {spec.branch}")
-        self.log(f"Implementing spec {spec.id}: {spec.title}")
+        self.log_info(f"Implementing spec {spec.id}: {spec.title}")
         self.run_design_gate_for_spec(spec, story_dir, mode=mode)
         tasks = self.plan_tasks(spec, story_dir, mode=mode)
         if not tasks:
             raise OrchestratorError(f"Planning produced no tasks for {spec.id}")
         tasks = self.order_tasks_by_layer(tasks)
-        max_tasks = int(self.config["execution"].get("max_tasks_per_spec", 8))
+        max_tasks = int(self.config["execution"].get("max_tasks_per_spec", DEFAULT_MAX_TASKS_PER_SPEC))
+        selected_tasks = tasks[:max_tasks]
+        if len(tasks) > len(selected_tasks):
+            self.log_warning(
+                f"Task run limited to {len(selected_tasks)}/{len(tasks)} tasks by execution.max_tasks_per_spec={max_tasks}."
+            )
+        else:
+            self.log_info(f"Task run will process all {len(selected_tasks)} planned task(s).")
         blocked = 0
         completed = 0
         completed_task_ids = {
@@ -1068,7 +1112,7 @@ class AgenticSDLC:
             for task in tasks
             if self.push_tasks_to_source_spec_branch() and self.task_completed_in_source_branch(spec, task)
         }
-        for task in tasks[:max_tasks]:
+        for task in selected_tasks:
             result = self.run_task_pipeline(spec, task, story_dir, mode=mode, completed_task_ids=completed_task_ids)
             if result == "blocked":
                 blocked += 1
@@ -1081,7 +1125,13 @@ class AgenticSDLC:
             self.create_final_pr_from_spec_branch(spec, story_dir, mode=mode)
         if mark_seen and not self.dry_run:
             self.mark_spec_seen(spec, status=("blocked" if blocked else "processed"), run_id=run_id)
-        self.write_agent_log(story_dir, "orchestrator", "spec_processed", "completed", f"Processed {completed} task(s); blocked {blocked} task(s) waiting for layer gates")
+        summary = f"Processed {completed} task(s); blocked {blocked} task(s) waiting for layer gates"
+        self.write_agent_log(story_dir, "orchestrator", "spec_processed", "completed" if blocked == 0 else "blocked", summary)
+        if blocked:
+            self.log_error(f"Spec incomplete: {summary}. Run artifacts: {story_dir}")
+            return False
+        self.log_success(f"Spec complete: {summary}. Run artifacts: {story_dir}")
+        return True
 
     def plan_tasks(self, spec: SpecCandidate, story_dir: Path, mode: str) -> List[AgentTask]:
         plan_path = story_dir / "plan.json"
@@ -1876,26 +1926,27 @@ class AgenticSDLC:
         mode: str,
         completed_task_ids: Optional[Iterable[str]] = None,
     ) -> str:
-        self.log(f"  Task {task.task_id}: {task.title} [{task.domain}/{self.task_layer(task)}]")
+        self.log_info(f"Task {task.task_id}: {task.title} [{task.domain}/{self.task_layer(task)}]")
         task_run_id = self.make_task_run_id(spec, task)
         task_dir = story_dir / "tasks" / self.task_dir_name(task)
         task_dir.mkdir(parents=True, exist_ok=True)
         write_json(task_dir / "task.json", task.__dict__)
         if self.push_tasks_to_source_spec_branch() and self.task_completed_in_source_branch(spec, task):
             self.write_agent_log(story_dir, "orchestrator", "task_already_completed", "skipped", f"{task.task_id} already has a completion marker on {spec.branch}")
-            self.log(f"    Skipping already completed task {task.task_id}")
+            self.log_success(f"Task already completed; skipping {task.task_id}")
             return "completed"
         try:
             self.ensure_task_dependencies_satisfied(spec, task, story_dir, task_dir, completed_task_ids=completed_task_ids)
             self.ensure_layer_dependencies_satisfied(spec, task, story_dir, task_dir)
         except TaskDependencyBlocked as exc:
             self.write_agent_log(story_dir, "layer-sequencing-orchestrator", "task_blocked_dependency", "blocked", str(exc))
-            self.log(f"    Task dependency blocked {task.task_id}; earlier split tasks must complete first.")
+            self.log_error(f"Task dependency blocked {task.task_id}; earlier split tasks must complete first. Reason: {exc}")
             return "blocked"
         except LayerDependencyBlocked as exc:
             self.write_agent_log(story_dir, "layer-sequencing-orchestrator", "task_blocked_layer_dependency", "blocked", str(exc))
-            self.log(f"    Layer dependency blocked task {task.task_id}; watcher will retry after previous layer PR is merged/passed.")
+            self.log_error(f"Layer dependency blocked task {task.task_id}; watcher will retry after previous layer PR is merged/passed. Reason: {exc}")
             return "blocked"
+        worktree: Optional[Path] = None
         try:
             worktree = self.prepare_worktree(spec, task, task_run_id)
             if self.run_tasks_in_current_worktree() and not self.dry_run:
@@ -1915,21 +1966,80 @@ class AgenticSDLC:
                 self.mark_task_spec_completed(worktree, spec, task, mode)
             self.create_pr_if_changed(worktree, spec, task, story_dir, task_dir, mode)
             self.write_agent_log(story_dir, "orchestrator", "task_completed", "completed", task.task_id)
+            self.log_success(f"Task completed {task.task_id}")
             return "completed"
         except BranchConflictBlocked as exc:
             self.write_agent_log(story_dir, "branch-conflict-coordinator", "task_blocked_file_overlap", "blocked", str(exc))
             write_text(task_dir / "branch-conflict-blocked.md", str(exc) + "\n")
-            self.log(f"    Branch conflict blocked task {task.task_id}; continuing with another task when available.")
+            self.log_error(f"Branch conflict blocked task {task.task_id}; continuing with another task when available. Reason: {exc}")
             return "blocked"
         except OrchestratorError as exc:
             message = str(exc)
             self.write_agent_log(story_dir, "orchestrator", "task_blocked_failure", "blocked", message[:800])
-            write_text(task_dir / "task-blocked.md", message.rstrip() + "\n")
-            self.log(f"    Task blocked by failure in {task.task_id}; continuing with another task when available.")
+            report = self.build_task_failure_report(spec, task, task_dir, worktree, message)
+            write_text(task_dir / "task-blocked.md", report)
+            self.log_error(f"Task blocked by failure in {task.task_id}; continuing with another task when available. See {task_dir / 'task-blocked.md'}")
             return "blocked"
         finally:
             # Keep worktree by default for debugging. Cleanup is manual to preserve context.
             pass
+
+    def build_task_failure_report(
+        self,
+        spec: SpecCandidate,
+        task: AgentTask,
+        task_dir: Path,
+        worktree: Optional[Path],
+        message: str,
+    ) -> str:
+        lines = [
+            "# Task Blocked",
+            "",
+            "Status: ERROR",
+            f"Time: {now_utc()}",
+            f"Spec: {spec.id}",
+            f"Source branch: {spec.branch}",
+            f"Spec path: {spec.path}",
+            f"Task: {task.task_id}",
+            f"Title: {task.title}",
+            f"Layer: {self.task_layer(task)}",
+            f"Domain: {task.domain}",
+            f"Task artifacts: {task_dir}",
+            f"Worktree: {worktree if worktree else 'not prepared'}",
+            "",
+            "## Failure Reason",
+            "",
+            message.strip() or "No failure message was provided.",
+            "",
+            "## Expected Paths",
+            "",
+        ]
+        if task.expected_paths:
+            lines.extend(f"- {path}" for path in task.expected_paths)
+        else:
+            lines.append("- No expected paths declared by the task plan.")
+        lines.extend(["", "## Changed Paths Since Task Start", ""])
+        changed: List[str] = []
+        if worktree is not None and worktree.exists():
+            try:
+                preexisting = self.task_preexisting_changed_paths.get((spec.id, task.task_id), set())
+                changed = sorted(set(git_changed_paths(worktree)) - preexisting)
+            except Exception as exc:
+                lines.append(f"- Could not inspect changed paths: {exc}")
+        if changed:
+            lines.extend(f"- {path}" for path in changed)
+        elif worktree is not None:
+            lines.append("- No new changed paths detected after subtracting preexisting worktree changes.")
+        codex_dir = task_dir / "codex"
+        lines.extend(["", "## Codex Logs", ""])
+        if codex_dir.exists():
+            logs = sorted(codex_dir.glob("*"), key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True)
+            for path in logs[:20]:
+                lines.append(f"- {path}")
+        else:
+            lines.append("- No Codex log directory exists for this task.")
+        lines.extend(["", "## Next Action", "", "Inspect the Codex logs above, fix the failing stage, then rerun the same `run-spec` command."])
+        return "\n".join(lines).rstrip() + "\n"
 
     def prepare_worktree(self, spec: SpecCandidate, task: AgentTask, run_id: str) -> Path:
         base_ref = self.ref_for_branch(spec.branch)
@@ -2105,14 +2215,14 @@ class AgenticSDLC:
             sequence.insert(2, ("cloud-night-worker.agent.md", "avoid local-only assumptions and continue cloud-safe work", False))
 
         total = len(sequence)
-        self.log(f"    Agent sequence: {total} agent step(s) for task {task.task_id}")
+        self.log_info(f"Agent sequence: {total} agent step(s) for task {task.task_id}")
         for index, (agent_file, objective, allow_write) in enumerate(sequence, start=1):
             agent_name = agent_file.replace(".agent.md", "")
             prompt = self.render_task_prompt(agent_file, objective, spec, task, story_dir, task_dir, mode, allow_write=allow_write)
             prompt_path = task_dir / "prompts" / f"{safe_slug(agent_name)}.md"
             write_text(prompt_path, prompt)
-            self.log(f"    [{index}/{total}] START {agent_name}: {objective}")
-            self.log(f"        prompt: {prompt_path}")
+            self.log_info(f"[{index}/{total}] START {agent_name}: {objective}")
+            self.log_info(f"prompt: {prompt_path}")
             self.write_agent_log(story_dir, agent_name, objective, "started", f"Task {task.task_id}; step {index}/{total}; prompt={prompt_path}")
             started = time.monotonic()
             stage_status = "completed"
@@ -2125,7 +2235,7 @@ class AgenticSDLC:
             ):
                 readonly_worktree = self.prepare_readonly_agent_worktree(spec, task, agent_name, task_dir)
                 stage_worktree = readonly_worktree
-                self.log(f"        read-only stage cwd: {stage_worktree}")
+                self.log_info(f"read-only stage cwd: {stage_worktree}")
             try:
                 self.call_codex(prompt, cwd=stage_worktree, run_dir=task_dir, agent=agent_name, mode=mode, allow_write=allow_write)
             except OrchestratorError as exc:
@@ -2135,7 +2245,7 @@ class AgenticSDLC:
                     f"Analysis stage `{agent_name}` did not complete cleanly but is advisory; "
                     f"continuing to implementation. Error: {str(exc).strip()}"
                 )
-                self.log(f"        Codex warning: {agent_name}: {warning}")
+                self.log_warning(f"Codex advisory warning: {agent_name}: {warning}")
                 self.write_agent_log(story_dir, agent_name, objective, "warning", warning[:800])
                 with (task_dir / "analysis-stage-warnings.md").open("a", encoding="utf-8") as fh:
                     fh.write(f"- `{now_utc()}` {warning}\n")
@@ -2145,8 +2255,10 @@ class AgenticSDLC:
                     self.cleanup_readonly_agent_worktree(readonly_worktree)
             elapsed = time.monotonic() - started
             self.write_agent_log(story_dir, agent_name, objective, stage_status, f"Task {task.task_id}; step {index}/{total}; elapsed={elapsed:.1f}s")
-            status_label = "DONE" if stage_status == "completed" else "WARN"
-            self.log(f"    [{index}/{total}] {status_label}  {agent_name} elapsed={elapsed:.1f}s")
+            if stage_status == "completed":
+                self.log_success(f"[{index}/{total}] DONE {agent_name} elapsed={elapsed:.1f}s")
+            else:
+                self.log_warning(f"[{index}/{total}] WARN {agent_name} elapsed={elapsed:.1f}s")
 
     def resolve_domain_agent(self, domain: str) -> str:
         domain = domain.lower()
@@ -2331,20 +2443,41 @@ class AgenticSDLC:
         return str(self.config["codex"].get("approval_policy", "never"))
 
     def codex_stage_timeout_seconds(self, allow_write: bool) -> int:
+        execution = self.config.get("execution", {})
+        max_timeout = self.agent_timeout_max_seconds()
         env_key = "AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS" if allow_write else "AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS"
         env_value = os.environ.get(env_key, "").strip()
         if env_value:
             try:
-                return max(0, int(env_value))
+                requested = int(env_value)
             except ValueError:
-                return 0
-        execution = self.config.get("execution", {})
+                requested = max_timeout
+            return self.clamp_agent_timeout(requested, max_timeout)
         key = "write_agent_timeout_seconds" if allow_write else "analysis_agent_timeout_seconds"
-        fallback = 900 if allow_write else 180
         try:
-            return max(0, int(execution.get(key, fallback)))
+            requested = int(execution.get(key, DEFAULT_AGENT_TIMEOUT_SECONDS))
         except (TypeError, ValueError):
-            return fallback
+            requested = DEFAULT_AGENT_TIMEOUT_SECONDS
+        return self.clamp_agent_timeout(requested, max_timeout)
+
+    def agent_timeout_max_seconds(self) -> int:
+        env_value = os.environ.get("AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS", "").strip()
+        if env_value:
+            try:
+                return min(max(1, int(env_value)), DEFAULT_AGENT_TIMEOUT_SECONDS)
+            except ValueError:
+                return DEFAULT_AGENT_TIMEOUT_SECONDS
+        execution = self.config.get("execution", {})
+        try:
+            configured = int(execution.get("agent_timeout_max_seconds", DEFAULT_AGENT_TIMEOUT_SECONDS))
+            return min(max(1, configured), DEFAULT_AGENT_TIMEOUT_SECONDS)
+        except (TypeError, ValueError):
+            return DEFAULT_AGENT_TIMEOUT_SECONDS
+
+    def clamp_agent_timeout(self, requested: int, max_timeout: int) -> int:
+        if requested <= 0:
+            return max_timeout
+        return min(requested, max_timeout)
 
     def call_codex(self, prompt: str, cwd: Path, run_dir: Path, agent: str, mode: str, allow_write: bool) -> None:
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -2359,13 +2492,13 @@ class AgenticSDLC:
         codex_dir.mkdir(parents=True, exist_ok=True)
         if self.dry_run:
             write_text(final_file, f"DRY-RUN: would run {agent} in {cwd}\n")
-            self.log(f"        DRY-RUN would run Codex agent={agent} cwd={cwd}")
+            self.log_info(f"DRY-RUN would run Codex agent={agent} cwd={cwd}")
             return
         if codex_bin is None:
             write_text(final_file, f"Codex binary not found. Prompt saved for manual/local execution.\n")
             write_text(run_dir / "prompts_missing_codex" / f"{agent}-{prompt_hash}.md", prompt)
             if self.dry_run or bool(self.config["codex"].get("allow_missing_codex", False)):
-                self.log(f"        Codex binary missing; prompt saved for {agent}")
+                self.log_warning(f"Codex binary missing; prompt saved for {agent}")
                 return
             raise OrchestratorError(f"Codex binary not found: {configured_codex_bin}. Install Codex CLI, run with --dry-run, or set codex.allow_missing_codex=true only for prompt-generation workflows.")
         sandbox = self.codex_sandbox(allow_write)
@@ -2398,12 +2531,12 @@ class AgenticSDLC:
         heartbeat_seconds = int(self.config.get("logging", {}).get("codex_heartbeat_seconds", os.environ.get("AGENTIC_CODEX_HEARTBEAT_SECONDS", "30")))
         timeout_seconds = self.codex_stage_timeout_seconds(allow_write)
         preview_chars = int(self.config.get("logging", {}).get("codex_preview_chars", os.environ.get("AGENTIC_CODEX_PREVIEW_CHARS", "220")))
-        self.log(f"        Codex start: agent={agent} mode={mode} sandbox={sandbox} model={model} reasoning={reasoning_effort}")
+        self.log_info(f"Codex start: agent={agent} mode={mode} sandbox={sandbox} model={model} reasoning={reasoning_effort}")
         if timeout_seconds:
-            self.log(f"        Codex timeout: agent={agent} seconds={timeout_seconds}")
-        self.log(f"        Codex cwd: {cwd}")
-        self.log(f"        Codex live log: {out_file}")
-        self.log(f"        Codex final: {final_file}")
+            self.log_info(f"Codex timeout budget: agent={agent} seconds={timeout_seconds}")
+        self.log_info(f"Codex cwd: {cwd}")
+        self.log_info(f"Codex live log: {out_file}")
+        self.log_info(f"Codex final: {final_file}")
 
         def summarize_event(raw_line: str) -> str:
             line = raw_line.strip()
@@ -2490,10 +2623,10 @@ class AgenticSDLC:
                 last_event = summary
                 if kind == "stdout":
                     stdout_tail.append(summary)
-                    self.log(f"        Codex event: {agent}: {summary}")
+                    self.log_status(stream_log_level(kind, summary), f"Codex event: {agent}: {summary}")
                 else:
                     stderr_tail.append(summary)
-                    self.log(f"        Codex stderr: {agent}: {summary}")
+                    self.log_status(stream_log_level(kind, summary), f"Codex stderr: {agent}: {summary}")
             except queue.Empty:
                 pass
             rc = proc.poll()
@@ -2503,7 +2636,7 @@ class AgenticSDLC:
             if timeout_seconds and now - started >= timeout_seconds:
                 timed_out = True
                 elapsed = int(now - started)
-                self.log(f"        Codex timeout: agent={agent} elapsed={elapsed}s pid={proc.pid} last={last_event}")
+                self.log_error(f"Codex timeout: agent={agent} elapsed={elapsed}s pid={proc.pid} last={last_event}")
                 try:
                     proc.terminate()
                     proc.wait(timeout=5)
@@ -2523,7 +2656,7 @@ class AgenticSDLC:
                     "log": str(out_file),
                 }
                 append_jsonl(heartbeat_file, heartbeat)
-                self.log(f"        Codex still running: agent={agent} elapsed={elapsed}s pid={proc.pid} last={last_event}")
+                self.log_info(f"Codex still running: agent={agent} elapsed={elapsed}s pid={proc.pid} last={last_event}")
                 last_heartbeat = now
             time.sleep(0.2)
 
@@ -2537,21 +2670,29 @@ class AgenticSDLC:
             last_event = summary
             if kind == "stdout":
                 stdout_tail.append(summary)
-                self.log(f"        Codex event: {agent}: {summary}")
+                self.log_status(stream_log_level(kind, summary), f"Codex event: {agent}: {summary}")
             else:
                 stderr_tail.append(summary)
-                self.log(f"        Codex stderr: {agent}: {summary}")
+                self.log_status(stream_log_level(kind, summary), f"Codex stderr: {agent}: {summary}")
 
         elapsed = time.monotonic() - started
         if timed_out:
+            tail = "; ".join((stderr_tail + stdout_tail)[-5:])
             raise CodexAgentTimeout(
                 f"Codex agent {agent} timed out after {timeout_seconds}s. "
+                f"Last event: {last_event}. "
+                f"Recent output: {tail or 'none'}. "
                 f"See {out_file}" + (f" and {stderr_file}" if stderr_file.exists() else "")
             )
         if proc.returncode != 0:
-            self.log(f"        Codex failed: agent={agent} exit={proc.returncode} elapsed={elapsed:.1f}s log={out_file}")
-            raise OrchestratorError(f"Codex agent {agent} failed with exit code {proc.returncode}. See {out_file}" + (f" and {stderr_file}" if stderr_file.exists() else ""))
-        self.log(f"        Codex done: agent={agent} exit=0 elapsed={elapsed:.1f}s log={out_file}")
+            tail = "; ".join((stderr_tail + stdout_tail)[-8:])
+            self.log_error(f"Codex failed: agent={agent} exit={proc.returncode} elapsed={elapsed:.1f}s log={out_file} recent={tail or 'none'}")
+            raise OrchestratorError(
+                f"Codex agent {agent} failed with exit code {proc.returncode}. "
+                f"Recent output: {tail or 'none'}. "
+                f"See {out_file}" + (f" and {stderr_file}" if stderr_file.exists() else "")
+            )
+        self.log_success(f"Codex done: agent={agent} exit=0 elapsed={elapsed:.1f}s log={out_file}")
 
     def write_agent_log(self, story_dir: Path, agent: str, action: str, status: str, summary: str) -> None:
         record = {
@@ -2563,7 +2704,8 @@ class AgenticSDLC:
         }
         append_jsonl(story_dir / "agents.log.jsonl", record)
         md = story_dir / "agents.log.md"
-        line = f"- `{record['ts']}` **{agent}** `{status}` — {action}: {summary}\n"
+        level = status_log_level(status)
+        line = f"- `{record['ts']}` [{level}] **{agent}** `{status}` — {action}: {summary}\n"
         with md.open("a", encoding="utf-8") as fh:
             fh.write(line)
 
@@ -3521,7 +3663,7 @@ Review / Approve / Request changes / Decide tradeoff
             self.log(f"Spec is already completed; skipping: {branch}:{spec_path}")
             return 0
         if not self.is_spec_ready(spec):
-            print(f"ERROR: spec is not ready for autonomous implementation: {spec.status or 'no-status'}", file=sys.stderr)
+            print(f"[ERROR] spec is not ready for autonomous implementation: {spec.status or 'no-status'}", file=sys.stderr)
             return 1
         if not self.validate_spec_candidate(spec):
             return 1
@@ -3529,14 +3671,16 @@ Review / Approve / Request changes / Decide tradeoff
             self.log(f"Existing agent branch found for {spec.id}; skipping to avoid duplicate PRs.")
             return 0
         try:
-            self.implement_spec(spec, mode=mode, mark_seen=True)
+            completed = self.implement_spec(spec, mode=mode, mark_seen=True)
         except Exception as exc:
             run_id = self.make_run_id(spec, prefix="fail")
             if not self.dry_run:
                 self.mark_spec_seen(spec, status="failed", run_id=run_id)
-            print(f"ERROR processing {spec.id}: {exc}", file=sys.stderr)
+            print(f"[ERROR] processing {spec.id}: {exc}", file=sys.stderr)
             if self.verbose:
                 raise
+            return 1
+        if not completed:
             return 1
         return 0
 
@@ -3655,7 +3799,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if args.allow_cloud:
                 os.environ[env_var] = orchestrator.config.get("codex", {}).get("cloud_opt_in_value", "true")
             elif not orchestrator.cloud_mode_allowed(explicit=False):
-                print(f"ERROR: cloud mode is blocked by local-first policy. Re-run with --allow-cloud or set {env_var}=true only when cloud execution is explicitly intended.", file=sys.stderr)
+                print(f"[ERROR] cloud mode is blocked by local-first policy. Re-run with --allow-cloud or set {env_var}=true only when cloud execution is explicitly intended.", file=sys.stderr)
                 return 2
         if args.command == "run-once":
             return orchestrator.run_once(mode=args.mode, max_specs=args.max_specs, fetch=not args.no_fetch)
@@ -3670,7 +3814,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error(f"Unknown command: {args.command}")
         return 2
     except OrchestratorError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
 
 
