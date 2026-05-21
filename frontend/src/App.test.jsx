@@ -1,6 +1,6 @@
 import React from "react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import * as api from "./api";
@@ -66,17 +66,22 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Seed note")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const noteCard = screen.getByRole("heading", { name: "Seed note" }).closest("li");
+    expect(noteCard).not.toBeNull();
+    await user.click(within(noteCard).getByRole("button", { name: "Edit" }));
 
-    expect(screen.getByLabelText("Title")).toHaveValue("Seed note");
-    await user.clear(screen.getByLabelText("Title"));
-    await user.type(screen.getByLabelText("Title"), "Updated note");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    const titleInput = screen.getByDisplayValue("Seed note");
+    expect(titleInput).toBeInTheDocument();
+    await user.clear(titleInput);
+    await user.type(titleInput, "Updated note");
+    const editForm = titleInput.closest("form");
+    expect(editForm).not.toBeNull();
+    await user.click(within(editForm).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(api.updateNote).toHaveBeenCalledWith(1, { title: "Updated note", body: "Seed body" }));
     expect(await screen.findByText("Note updated.")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(within(noteCard).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(api.deleteNote).toHaveBeenCalledWith(1));
     expect(await screen.findByText("Note deleted.")).toBeInTheDocument();
   });

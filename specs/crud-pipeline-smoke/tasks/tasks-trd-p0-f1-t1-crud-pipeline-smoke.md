@@ -143,7 +143,7 @@ patterns to avoid: god service, hidden global state, broad refactor, unrelated c
 - [x] `P0-F1-T1-DB` Design and implement SQLite database notes model.
 - [x] `P0-F1-T2-API` Build Python API CRUD endpoints.
 - [x] `P0-F1-T3-UI` Build React UI CRUD page.
-- [ ] `P0-F1-T4-QA` Run QA E2E and PM evidence.
+- [x] `P0-F1-T4-QA` Run QA E2E and PM evidence.
 
 ## Tasks
 

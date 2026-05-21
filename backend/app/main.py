@@ -22,6 +22,17 @@ def _json_response(status: str, payload: Any) -> tuple[str, list[tuple[str, str]
     return status, headers, body
 
 
+def _cors_headers(extra: list[tuple[str, str]] | None = None) -> list[tuple[str, str]]:
+    headers = [
+        ("Access-Control-Allow-Origin", "*"),
+        ("Access-Control-Allow-Headers", "Content-Type"),
+        ("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"),
+    ]
+    if extra:
+        headers.extend(extra)
+    return headers
+
+
 def _read_json(environ: dict[str, Any]) -> dict[str, Any]:
     try:
         length = int(environ.get("CONTENT_LENGTH") or 0)
@@ -53,7 +64,9 @@ def create_app(repository: NoteRepository | None = None) -> Callable[[dict[str, 
         path = environ.get("PATH_INFO", "")
 
         try:
-            if path == "/healthz":
+            if method == "OPTIONS" and path.startswith("/api/notes"):
+                status, headers, body = "204 No Content", _cors_headers([("Content-Length", "0")]), b""
+            elif path == "/healthz":
                 status, headers, body = _json_response("200 OK", {"status": "ok"})
             elif path == "/api/notes" and method == "GET":
                 notes = [asdict(note) for note in repo.list()]
@@ -94,6 +107,7 @@ def create_app(repository: NoteRepository | None = None) -> Callable[[dict[str, 
         except json.JSONDecodeError:
             status, headers, body = _json_response("400 Bad Request", {"error": "invalid json"})
 
+        headers = _cors_headers(headers)
         start_response(status, headers)
         return [body]
 

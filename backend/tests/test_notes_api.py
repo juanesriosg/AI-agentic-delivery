@@ -78,6 +78,13 @@ class TestNotesApi(unittest.TestCase):
         self.assertEqual(missing["status"], "404 Not Found")
         self.assertEqual(json.loads(missing["body"])["error"], "note not found")
 
+    def test_cors_preflight_allows_frontend_browser_flow(self) -> None:
+        response = run_app(self.app, "OPTIONS", "/api/notes")
+        self.assertEqual(response["status"], "204 No Content")
+        self.assertEqual(response["body"], "")
+        self.assertEqual(response["headers"].get("Access-Control-Allow-Origin"), "*")
+        self.assertIn("GET, POST, PUT, DELETE, OPTIONS", response["headers"].get("Access-Control-Allow-Methods", ""))
+
 
 if __name__ == "__main__":
     unittest.main()
