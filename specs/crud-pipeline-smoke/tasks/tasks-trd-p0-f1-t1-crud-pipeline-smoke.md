@@ -187,4 +187,4 @@ Task completed by agentic SDLC.
 - Runtime mode: `local`
 - Completed at: `2026-05-21T01:06:36Z`
 - Evidence: `docs/agentic-evidence/spec-a25b601c60-tasks-trd-p0-f1-t1-crud-pipeline-smoke/p0-f1-t1-db/`
-
+- [x] `p0-f1-t1-db` - Design and implement SQLite database notes model.
