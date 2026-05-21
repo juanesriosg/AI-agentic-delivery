@@ -59,6 +59,8 @@ SHELL_SCRIPT_GLOBS = (
 )
 ISO = "%Y-%m-%dT%H:%M:%SZ"
 DEFAULT_AGENT_TIMEOUT_SECONDS = 2 * 60 * 60
+DEFAULT_ANALYSIS_AGENT_TIMEOUT_SECONDS = 60 * 60
+DEFAULT_WRITE_AGENT_TIMEOUT_SECONDS = DEFAULT_AGENT_TIMEOUT_SECONDS
 DEFAULT_MAX_TASKS_PER_SPEC = 50
 
 LOG_LEVEL_BY_STATUS = {
@@ -697,8 +699,8 @@ class AgenticSDLC:
                 "max_tasks_per_spec": DEFAULT_MAX_TASKS_PER_SPEC,
                 "retry_failed_specs": True,
                 "agent_timeout_max_seconds": DEFAULT_AGENT_TIMEOUT_SECONDS,
-                "analysis_agent_timeout_seconds": DEFAULT_AGENT_TIMEOUT_SECONDS,
-                "write_agent_timeout_seconds": DEFAULT_AGENT_TIMEOUT_SECONDS,
+                "analysis_agent_timeout_seconds": DEFAULT_ANALYSIS_AGENT_TIMEOUT_SECONDS,
+                "write_agent_timeout_seconds": DEFAULT_WRITE_AGENT_TIMEOUT_SECONDS,
                 "analysis_stage_failures_block_task": False,
                 "readonly_agents_in_isolated_worktree": True,
             },
@@ -1286,10 +1288,26 @@ class AgenticSDLC:
         for checked, task_id, title in items:
             depends = [previous_id] if previous_id else []
             previous_id = task_id
-            if checked:
+            task = self.agent_task_from_split_item(spec, task_id, title, depends)
+            if checked and not self.checked_split_task_needs_replay(spec, task):
                 continue
-            tasks.append(self.agent_task_from_split_item(spec, task_id, title, depends))
+            tasks.append(task)
         return tasks
+
+    def checked_split_task_needs_replay(self, spec: SpecCandidate, task: AgentTask) -> bool:
+        """Return true for a checked task whose source-branch evidence is incomplete.
+
+        A task-list checkbox is usually enough to skip completed work. In
+        source-spec mode, however, a failed rerun can leave a checkbox and task
+        marker on the branch without the layer-gate PASS artifact. In that case
+        the task must be planned again so it can commit the missing scoped
+        artifacts and unblock downstream DB/API/frontend layers.
+        """
+        if not self.push_tasks_to_source_spec_branch():
+            return False
+        if not self.task_completed_in_source_branch_by_id(spec, task.task_id):
+            return False
+        return not self.task_completed_in_source_branch(spec, task)
 
     def agent_task_from_split_item(self, spec: SpecCandidate, task_id: str, title: str, depends_on: List[str]) -> AgentTask:
         blueprint = self.worker_wrapper_task_blueprint(task_id)
@@ -2443,22 +2461,28 @@ class AgenticSDLC:
         return str(self.config["codex"].get("approval_policy", "never"))
 
     def codex_stage_timeout_seconds(self, allow_write: bool) -> int:
-        execution = self.config.get("execution", {})
         max_timeout = self.agent_timeout_max_seconds()
+        configured = self.configured_stage_timeout_seconds(allow_write)
         env_key = "AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS" if allow_write else "AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS"
         env_value = os.environ.get(env_key, "").strip()
         if env_value:
             try:
                 requested = int(env_value)
             except ValueError:
-                requested = max_timeout
+                requested = configured
+            if not allow_write:
+                requested = max(requested, configured)
             return self.clamp_agent_timeout(requested, max_timeout)
+        return self.clamp_agent_timeout(configured, max_timeout)
+
+    def configured_stage_timeout_seconds(self, allow_write: bool) -> int:
+        execution = self.config.get("execution", {})
         key = "write_agent_timeout_seconds" if allow_write else "analysis_agent_timeout_seconds"
+        default_timeout = DEFAULT_WRITE_AGENT_TIMEOUT_SECONDS if allow_write else DEFAULT_ANALYSIS_AGENT_TIMEOUT_SECONDS
         try:
-            requested = int(execution.get(key, DEFAULT_AGENT_TIMEOUT_SECONDS))
+            return int(execution.get(key, default_timeout))
         except (TypeError, ValueError):
-            requested = DEFAULT_AGENT_TIMEOUT_SECONDS
-        return self.clamp_agent_timeout(requested, max_timeout)
+            return default_timeout
 
     def agent_timeout_max_seconds(self) -> int:
         env_value = os.environ.get("AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS", "").strip()
@@ -3098,6 +3122,28 @@ Revert this PR. No production deployment should occur without release gate appro
         """Changed paths that existed before this current-worktree task began."""
         return set(getattr(self, "task_preexisting_changed_paths", {}).get((spec.id, task.task_id), set()))
 
+    def source_task_commit_exclude_paths(
+        self,
+        spec: SpecCandidate,
+        task: AgentTask,
+        scopes: Optional[Iterable[str]],
+    ) -> Optional[Iterable[str]]:
+        """Return paths to exclude from a source-spec task commit.
+
+        In normal current-worktree PR mode, preexisting scoped edits are left
+        untouched so unrelated local work is not swept into the task PR. In
+        source-spec mode, the source branch is the integration branch: a rerun
+        may start with validated task artifacts already present from a previous
+        failed attempt. Excluding those scoped artifacts would commit only the
+        completion marker and leave later layer gates unable to see the real
+        DB/API/frontend evidence on the branch.
+        """
+        if not scopes:
+            return None
+        if self.run_tasks_in_current_worktree() and self.push_tasks_to_source_spec_branch():
+            return None
+        return self.preexisting_task_changes(spec, task)
+
     def task_completed_in_source_branch(self, spec: SpecCandidate, task: AgentTask) -> bool:
         """Return true when a previous run committed the task completion marker.
 
@@ -3109,7 +3155,12 @@ Revert this PR. No production deployment should occur without release gate appro
         ref = self.ref_for_branch(spec.branch)
         rel = str(self.task_completion_path(spec, task)).replace("\\", "/")
         out = git_output_or_empty(self.repo, "show", f"{ref}:{rel}")
-        return bool(out.strip())
+        if not out.strip():
+            return False
+        layer_gate_script = self.repo / ".ai/scripts/layer_gate.py"
+        if bool(self.config.get("layer_gates", {}).get("enabled", True)) and layer_gate_script.exists():
+            return self.source_branch_has_layer_pass(spec, self.task_layer(task))
+        return True
 
     def update_front_matter_status(self, text: str, status: str, completed_at: Optional[str] = None) -> str:
         """Update simple YAML front matter status fields without external deps."""
@@ -3267,7 +3318,18 @@ This marker allows the POC-to-PR workflow to continue on later pushes without re
                     "Current-worktree task commits require an empty Git index before staging. "
                     "Commit, unstage, or stash existing staged files first."
                 )
-        git_add_changed_paths(worktree, scopes=scopes, exclude_paths=self.preexisting_task_changes(spec, task) if scopes else None)
+        exclude_paths = self.source_task_commit_exclude_paths(spec, task, scopes)
+        if scopes and exclude_paths is None:
+            preexisting = self.preexisting_task_changes(spec, task)
+            if preexisting:
+                self.write_agent_log(
+                    story_dir,
+                    "orchestrator",
+                    "preexisting_scoped_changes_included",
+                    "completed",
+                    f"Included {len(preexisting)} preexisting scoped path(s) in source-spec task commit for rerun safety",
+                )
+        git_add_changed_paths(worktree, scopes=scopes, exclude_paths=exclude_paths)
         staged = git(worktree, "diff", "--cached", "--name-only")
         if not staged.strip():
             self.write_agent_log(story_dir, "orchestrator", "nothing_staged", "completed", f"No commit for {task.task_id}; runtime artifacts were excluded")

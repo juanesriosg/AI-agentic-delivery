@@ -115,7 +115,7 @@
     "retry_failed_specs": true,
     "default_mode": "local",
     "agent_timeout_max_seconds": 7200,
-    "analysis_agent_timeout_seconds": 7200,
+    "analysis_agent_timeout_seconds": 3600,
     "write_agent_timeout_seconds": 7200,
     "analysis_stage_failures_block_task": false,
     "readonly_agents_in_isolated_worktree": true,

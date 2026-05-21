@@ -21,6 +21,10 @@ PLACEHOLDER_MARKERS = [
     "TBD",
 ]
 
+BLOCKING_STATUS_RE = re.compile(
+    r"(?im)^\s*(?:[-*]\s*)?(?:status|result|verdict)\s*:\s*`?(blocked|fail|failed)`?\b"
+)
+
 BASE_REQUIRED = [
     "agents.log.md",
     "qa-checklist.md",
@@ -79,6 +83,10 @@ def evaluate(layer: str, evidence_dir: Path, ui_change: bool, cloud_change: bool
             for marker in PLACEHOLDER_MARKERS:
                 if marker in content:
                     failures.append(f"Placeholder marker `{marker}` remains in {evidence_dir / rel}")
+            for match in BLOCKING_STATUS_RE.finditer(content):
+                status = match.group(1).lower()
+                line = match.group(0).strip()
+                failures.append(f"Evidence file declares `{status}` status in {evidence_dir / rel}: {line}")
     combined = "\n".join(combined_parts).lower()
     rule = LAYER_RULES.get(layer, {"keywords": [], "must_include_any": [], "description": "Generic layer gate."})
     if layer in LAYER_RULES:

@@ -13,6 +13,8 @@ from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).with_name("agentic_sdlc.py")
+GENERATE_MATRIX_PATH = Path(__file__).with_name("generate-test-matrix.py")
+LAYER_GATE_PATH = Path(__file__).with_name("layer_gate.py")
 SPEC = importlib.util.spec_from_file_location("agentic_sdlc", MODULE_PATH)
 assert SPEC and SPEC.loader
 agentic_sdlc = importlib.util.module_from_spec(SPEC)
@@ -77,7 +79,7 @@ def make_orchestrator() -> object:
         },
         "execution": {
             "agent_timeout_max_seconds": 7200,
-            "analysis_agent_timeout_seconds": 7200,
+            "analysis_agent_timeout_seconds": 3600,
             "write_agent_timeout_seconds": 7200,
             "analysis_stage_failures_block_task": False,
             "readonly_agents_in_isolated_worktree": True,
@@ -88,6 +90,7 @@ def make_orchestrator() -> object:
     orchestrator.worktree_dir = Path.cwd() / ".agent" / "worktrees"
     orchestrator.dry_run = False
     orchestrator.verbose = False
+    orchestrator.task_preexisting_changed_paths = {}
     orchestrator.write_agent_log = lambda *args, **kwargs: None
     orchestrator.log = lambda *args, **kwargs: None
     orchestrator.debug = lambda *args, **kwargs: None
@@ -157,6 +160,36 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
             self.assertEqual(staged, ["task/new.txt"])
             self.assertEqual(cached, ["task/new.txt"])
 
+    def test_source_spec_current_worktree_commit_includes_preexisting_scoped_artifacts(self) -> None:
+        orchestrator = make_orchestrator()
+        orchestrator.config["branching"]["run_tasks_in_current_worktree"] = True
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/crud-smoke",
+            path="specs/crud-smoke/tasks.md",
+            sha="aaa",
+            content=CRUD_SPEC,
+            status="ready_for_agents",
+        )
+        task = agentic_sdlc.AgentTask(
+            task_id="crud-database",
+            title="Local CRUD data model",
+            responsibility="Implement local persistence contract.",
+            domain="database",
+            acceptance_criteria=["Data model supports CRUD records."],
+            expected_paths=["database/schema.sql"],
+            layer="database",
+            depends_on=[],
+        )
+        orchestrator.task_preexisting_changed_paths[(spec.id, task.task_id)] = {"database/schema.sql"}
+
+        self.assertIsNone(orchestrator.source_task_commit_exclude_paths(spec, task, scopes=["database/schema.sql"]))
+
+        orchestrator.config["branching"]["push_tasks_to_source_spec_branch"] = False
+        self.assertEqual(
+            {"database/schema.sql"},
+            set(orchestrator.source_task_commit_exclude_paths(spec, task, scopes=["database/schema.sql"]) or []),
+        )
+
     def test_current_worktree_mode_can_be_enabled_by_config_or_env(self) -> None:
         orchestrator = make_orchestrator()
 
@@ -201,6 +234,50 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         self.assertIn(f"docs/agentic-evidence/{spec.id}/artifact-manifest-contract", scopes)
         self.assertIn(f"docs/agentic-evidence/{spec.id}/layer-gates", scopes)
         self.assertIn(spec.path, scopes)
+
+    def test_source_branch_completion_marker_requires_layer_gate_pass(self) -> None:
+        orchestrator = make_orchestrator()
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/crud-smoke",
+            path="specs/crud-smoke/tasks.md",
+            sha="aaa",
+            content=CRUD_SPEC,
+            status="ready_for_agents",
+        )
+        task = agentic_sdlc.AgentTask(
+            task_id="crud-database",
+            title="Local CRUD data model",
+            responsibility="Implement local persistence contract.",
+            domain="database",
+            acceptance_criteria=["Data model supports CRUD records."],
+            layer="database",
+            depends_on=[],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(["git", "config", "user.email", "agent@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Agent"], cwd=repo, check=True)
+            subprocess.run(["git", "switch", "-c", spec.branch], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (repo / ".ai" / "scripts").mkdir(parents=True)
+            (repo / ".ai" / "scripts" / "layer_gate.py").write_text("# layer gate marker\n", encoding="utf-8")
+            marker = repo / orchestrator.task_completion_path(spec, task)
+            marker.parent.mkdir(parents=True)
+            marker.write_text("Status: completed\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "completion marker only"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            orchestrator.repo = repo
+            self.assertFalse(orchestrator.task_completed_in_source_branch(spec, task))
+
+            pass_file = repo / "docs" / "agentic-evidence" / spec.id / "layer-gates" / "database.passed.md"
+            pass_file.parent.mkdir(parents=True)
+            pass_file.write_text("# Database Layer Gate\n\nStatus: PASS\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "database gate pass"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            self.assertTrue(orchestrator.task_completed_in_source_branch(spec, task))
 
     def test_task_branch_conflict_scopes_exclude_source_spec_progress_file(self) -> None:
         orchestrator = make_orchestrator()
@@ -279,7 +356,7 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         old_write_timeout = os.environ.pop("AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS", None)
         old_max_timeout = os.environ.pop("AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS", None)
         try:
-            self.assertEqual(7200, orchestrator.codex_stage_timeout_seconds(allow_write=False))
+            self.assertEqual(3600, orchestrator.codex_stage_timeout_seconds(allow_write=False))
             self.assertEqual(7200, orchestrator.codex_stage_timeout_seconds(allow_write=True))
         finally:
             if old_analysis_timeout is not None:
@@ -313,6 +390,95 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
                 os.environ.pop("AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS", None)
             else:
                 os.environ["AGENTIC_CODEX_AGENT_TIMEOUT_MAX_SECONDS"] = old_max_timeout
+
+    def test_low_analysis_env_timeout_does_not_shrink_one_hour_budget(self) -> None:
+        orchestrator = make_orchestrator()
+        old_analysis_timeout = os.environ.get("AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS")
+        old_write_timeout = os.environ.get("AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS")
+        try:
+            os.environ["AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS"] = "45"
+            os.environ["AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS"] = "45"
+
+            self.assertEqual(3600, orchestrator.codex_stage_timeout_seconds(allow_write=False))
+            self.assertEqual(45, orchestrator.codex_stage_timeout_seconds(allow_write=True))
+        finally:
+            if old_analysis_timeout is None:
+                os.environ.pop("AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS", None)
+            else:
+                os.environ["AGENTIC_CODEX_ANALYSIS_TIMEOUT_SECONDS"] = old_analysis_timeout
+            if old_write_timeout is None:
+                os.environ.pop("AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS", None)
+            else:
+                os.environ["AGENTIC_CODEX_WRITE_TIMEOUT_SECONDS"] = old_write_timeout
+
+    def test_generate_test_matrix_uses_non_placeholder_unmapped_tokens(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            spec_path = Path(tmp) / "task.md"
+            spec_path.write_text(
+                "# Task\n\n## Acceptance Criteria\n\n- AC-001 User can create and update notes.\n",
+                encoding="utf-8",
+            )
+
+            cp = subprocess.run(
+                [sys.executable, str(GENERATE_MATRIX_PATH), "--spec", str(spec_path)],
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+        self.assertNotIn("TBD", cp.stdout)
+        self.assertIn("unmapped", cp.stdout)
+
+    def test_layer_gate_blocks_explicit_blocked_evidence_status(self) -> None:
+        required_files = [
+            "agents.log.md",
+            "qa-checklist.md",
+            "pm-checklist.md",
+            "test-evidence.md",
+            "scale-security-architecture-review.md",
+            "pr-notification.md",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            evidence = root / "evidence"
+            evidence.mkdir()
+            for name in required_files:
+                (evidence / name).write_text("# Evidence\n\nStatus: PASS\n", encoding="utf-8")
+            (evidence / "test-evidence.md").write_text(
+                "# Test Evidence\n\n### Node runtime check\n\nResult: BLOCKED\n\nNode is unavailable.\n",
+                encoding="utf-8",
+            )
+            pass_dir = root / "layer-gates"
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(LAYER_GATE_PATH),
+                    "--layer",
+                    "pm",
+                    "--spec-id",
+                    "spec-smoke",
+                    "--task-id",
+                    "qa",
+                    "--evidence-dir",
+                    str(evidence),
+                    "--pass-dir",
+                    str(pass_dir),
+                    "--write-pass-file",
+                    "--format",
+                    "json",
+                ],
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertFalse((pass_dir / "pm.passed.md").exists())
+
+        self.assertNotEqual(0, cp.returncode)
+        self.assertIn("declares `blocked` status", cp.stdout)
 
     def test_run_agent_sequence_continues_after_advisory_analysis_failure(self) -> None:
         orchestrator = make_orchestrator()
@@ -488,6 +654,56 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         self.assertEqual(ordered[0].depends_on, ["crud-design-gate"])
         self.assertEqual(ordered[1].depends_on, ["crud-database"])
         self.assertEqual(ordered[2].depends_on, ["crud-api"])
+
+    def test_checked_task_with_marker_but_missing_layer_gate_is_replanned(self) -> None:
+        orchestrator = make_orchestrator()
+        orchestrator.task_completed_in_source_branch_by_id = (
+            agentic_sdlc.AgenticSDLC.task_completed_in_source_branch_by_id.__get__(
+                orchestrator,
+                agentic_sdlc.AgenticSDLC,
+            )
+        )
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/crud-smoke",
+            path="specs/crud-smoke/tasks.md",
+            sha="aaa",
+            content=CRUD_SPEC.replace(
+                "- [ ] `crud-database` - Add local data model.",
+                "- [x] `crud-database` - Add local data model.",
+            ),
+            status="ready_for_agents",
+        )
+        task = agentic_sdlc.AgentTask(
+            task_id="crud-database",
+            title="Local CRUD data model",
+            responsibility="Implement local persistence contract.",
+            domain="database",
+            acceptance_criteria=["Data model supports CRUD records."],
+            layer="database",
+            depends_on=[],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(["git", "config", "user.email", "agent@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Agent"], cwd=repo, check=True)
+            subprocess.run(["git", "switch", "-c", spec.branch], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (repo / ".ai" / "scripts").mkdir(parents=True)
+            (repo / ".ai" / "scripts" / "layer_gate.py").write_text("# layer gate marker\n", encoding="utf-8")
+            marker = repo / orchestrator.task_completion_path(spec, task)
+            marker.parent.mkdir(parents=True)
+            marker.write_text("Status: completed\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "completion marker only"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            orchestrator.repo = repo
+
+            tasks = orchestrator.order_tasks_by_layer(orchestrator.plan_tasks_from_task_list(spec))
+
+        self.assertEqual(
+            [planned.task_id for planned in tasks],
+            ["crud-database", "crud-api", "crud-frontend"],
+        )
 
     def test_worker_wrapper_task_list_progress_uses_code_producing_first_task(self) -> None:
         orchestrator = make_orchestrator()

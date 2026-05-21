@@ -136,7 +136,7 @@ def main() -> int:
     print("|---|---|---|---|---|---|---|---|---|---|")
     for ac_id, req in acs:
         safe = req.replace("|", "\\|")
-        print(f"| {ac_id} | {safe} | TBD | TBD | TBD | TBD | TBD | TBD | TBD | not_started |")
+        print(f"| {ac_id} | {safe} | unmapped | unmapped | unmapped | unmapped | unmapped | unmapped | unmapped | not_started |")
     return 0
 
 
