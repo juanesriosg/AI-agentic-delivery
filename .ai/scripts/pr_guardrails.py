@@ -261,10 +261,14 @@ def discover_task_evidence_dirs() -> list[Path]:
     base = Path("docs/agentic-evidence")
     if not base.exists():
         return []
-    required = {"agents.log.md", "qa-checklist.md", "pm-checklist.md", "test-evidence.md"}
+    legacy_required = {"agents.log.md", "qa-checklist.md", "pm-checklist.md", "test-evidence.md"}
+    lean_required = {"review-pack.md", "test-evidence.md", "integration-qa.md", "pr-notification.md"}
     out: list[Path] = []
     for path in base.rglob("*"):
-        if path.is_dir() and required.issubset({child.name for child in path.iterdir() if child.is_file()}):
+        if not path.is_dir():
+            continue
+        names = {child.name for child in path.iterdir() if child.is_file()}
+        if legacy_required.issubset(names) or lean_required.issubset(names):
             out.append(path)
     return sorted(out)
 
@@ -300,8 +304,10 @@ def gate_status_failures(path: Path, gate_name: str) -> list[str]:
 
 def validate_evidence(evidence_dirs: list[Path], ui_required: bool) -> list[str]:
     failures: list[str] = []
-    required = ["agents.log.md", "qa-checklist.md", "pm-checklist.md", "test-evidence.md", "scale-security-architecture-review.md", "pr-notification.md"]
+    legacy_required = ["agents.log.md", "qa-checklist.md", "pm-checklist.md", "test-evidence.md", "scale-security-architecture-review.md", "pr-notification.md"]
+    lean_required = ["review-pack.md", "test-evidence.md", "integration-qa.md", "pr-notification.md"]
     for ev in evidence_dirs:
+        required = lean_required if any((ev / name).exists() for name in lean_required) else legacy_required
         for name in required:
             path = ev / name
             if not path.exists() or not file_text(path).strip():

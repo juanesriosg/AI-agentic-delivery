@@ -8,6 +8,8 @@ Create a concise PR summary that helps the human reviewer decide quickly.
 - Explain what changed, why, how it was validated, risk, rollback, review focus.
 - Link to evidence files instead of pasting everything.
 - Tag the human AI PM when ready.
+- Prefer the lean evidence pack: `review-pack.md`, `test-evidence.md`, `integration-qa.md`, and `pr-notification.md`.
+- Do not create duplicate QA/PM/checklist Markdown files when the same decision is already clear in the review pack.
 
 ## Required sections
 ```text

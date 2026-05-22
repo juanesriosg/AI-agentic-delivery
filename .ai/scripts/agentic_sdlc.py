@@ -62,6 +62,21 @@ DEFAULT_AGENT_TIMEOUT_SECONDS = 2 * 60 * 60
 DEFAULT_ANALYSIS_AGENT_TIMEOUT_SECONDS = 60 * 60
 DEFAULT_WRITE_AGENT_TIMEOUT_SECONDS = DEFAULT_AGENT_TIMEOUT_SECONDS
 DEFAULT_MAX_TASKS_PER_SPEC = 50
+LEAN_EVIDENCE_REQUIRED_FILES = [
+    "review-pack.md",
+    "test-evidence.md",
+    "integration-qa.md",
+    "pr-notification.md",
+]
+LEGACY_EVIDENCE_REQUIRED_FILES = [
+    "agents.log.md",
+    "qa-checklist.md",
+    "pm-checklist.md",
+    "test-evidence.md",
+    "layered-test-matrix.md",
+    "scale-security-architecture-review.md",
+    "pr-notification.md",
+]
 
 LOG_LEVEL_BY_STATUS = {
     "completed": "SUCCESS",
@@ -697,6 +712,7 @@ class AgenticSDLC:
             "execution": {
                 "max_specs_per_run": 1,
                 "max_tasks_per_spec": DEFAULT_MAX_TASKS_PER_SPEC,
+                "lean_agent_sequence": False,
                 "retry_failed_specs": True,
                 "agent_timeout_max_seconds": DEFAULT_AGENT_TIMEOUT_SECONDS,
                 "analysis_agent_timeout_seconds": DEFAULT_ANALYSIS_AGENT_TIMEOUT_SECONDS,
@@ -1228,6 +1244,39 @@ class AgenticSDLC:
             items.append((checked, task_id, title))
         return items
 
+    def task_list_parent_items(self, spec: SpecCandidate) -> List[Dict[str, Any]]:
+        """Read the task-list's existing parent tasks without inventing new splits."""
+        front_matter, _ = parse_front_matter_simple(spec.content)
+        if normalize_spec_status(front_matter.get("doc_type", "")) != "task_list":
+            return []
+        tasks_text = section_text(spec.content, ["tasks"])
+        if not tasks_text.strip():
+            return []
+        parent_re = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s+(\d+)\.0\s+(.+?)\s*$")
+        subtask_re = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s+(\d+)\.(\d+)\s+(.+?)\s*$")
+        items: List[Dict[str, Any]] = []
+        current: Optional[Dict[str, Any]] = None
+        for raw_line in tasks_text.splitlines():
+            parent = parent_re.match(raw_line)
+            if parent:
+                checked = parent.group(1).lower() == "x"
+                number = f"{parent.group(2)}.0"
+                title = parent.group(3).strip().rstrip(".")
+                task_id = safe_slug(f"{number} {title}", 48)
+                current = {
+                    "checked": checked,
+                    "number": number,
+                    "task_id": task_id,
+                    "title": title,
+                    "subtasks": [],
+                }
+                items.append(current)
+                continue
+            subtask = subtask_re.match(raw_line)
+            if subtask and current and subtask.group(2) == current["number"].split(".", 1)[0]:
+                current["subtasks"].append(subtask.group(4).strip().rstrip("."))
+        return items
+
     def completed_split_task_ids_from_text(self, text: str) -> set[str]:
         ids: set[str] = set()
         for pattern in (
@@ -1279,8 +1328,21 @@ class AgenticSDLC:
         return [(task_id in checked_ids, task_id, title) for task_id, title in canonical]
 
     def plan_tasks_from_task_list(self, spec: SpecCandidate) -> List[AgentTask]:
-        """Create a deterministic plan when a task-list can be split locally."""
-        items = self.canonical_worker_wrapper_split_items(spec) or self.split_task_progress_items(spec)
+        """Create a deterministic plan from already-written task-list tasks."""
+        parent_items = self.task_list_parent_items(spec)
+        if parent_items:
+            tasks: List[AgentTask] = []
+            previous_id: Optional[str] = None
+            for item in parent_items:
+                depends = [previous_id] if previous_id else []
+                previous_id = item["task_id"]
+                task = self.agent_task_from_parent_item(spec, item, depends)
+                if item["checked"] and not self.checked_split_task_needs_replay(spec, task):
+                    continue
+                tasks.append(task)
+            return tasks
+
+        items = self.split_task_progress_items(spec)
         if not items:
             return []
         tasks: List[AgentTask] = []
@@ -1293,6 +1355,80 @@ class AgenticSDLC:
                 continue
             tasks.append(task)
         return tasks
+
+    def agent_task_from_parent_item(self, spec: SpecCandidate, item: Dict[str, Any], depends_on: List[str]) -> AgentTask:
+        title = str(item["title"])
+        task_id = str(item["task_id"])
+        subtasks = [str(x) for x in item.get("subtasks", []) if str(x).strip()]
+        title_lower = f"{task_id} {title}".lower()
+        lowered = f"{task_id} {title} {' '.join(subtasks)}".lower()
+        domain = "backend"
+        layer = "api"
+        requires_screenshots = False
+        requires_e2e = False
+        requires_terraform = False
+        if any(word in lowered for word in ["database", "db", "data model", "schema", "manifest", "artifact", "config", "target generation", "dedupe"]):
+            domain, layer = "database", "database"
+        if any(word in lowered for word in ["api", "backend", "wrapper", "cli", "pipeline", "quality", "image", "url", "source", "runtime"]):
+            domain, layer = "backend", "api"
+        if (
+            any(word in lowered for word in ["frontend", "front-end", "react", "tsx", "jsx", "component", "screen"])
+            or re.search(r"\bui\b", lowered)
+        ):
+            domain, layer = "frontend", "frontend"
+            requires_screenshots = True
+            requires_e2e = True
+        if any(word in lowered for word in ["cloud", "container", "docker", "terraform", "aws", "entrypoint"]):
+            domain, layer = "cloud", "cloud"
+            requires_terraform = "terraform" in lowered
+        if any(word in lowered for word in ["security", "cdp", "loopback", "exposure"]):
+            domain, layer = "security", "crosscutting"
+        if any(word in title_lower for word in ["validation", "qa", "test evidence", "evidence", "documentation", "pr summary", "pr notification"]):
+            domain, layer = "qa", "qa"
+        if any(word in title_lower for word in ["pm acceptance", "product manager", "pm checklist"]):
+            domain, layer = "pm", "pm"
+
+        acceptance = subtasks or [f"{title} is implemented and validated against the task-list acceptance criteria."]
+        expected_paths = self.expected_paths_for_parent_task(spec, lowered)
+        return AgentTask(
+            task_id=task_id,
+            title=title,
+            responsibility=f"Complete the already-written task-list parent task `{item['number']}` without creating another split-task layer.",
+            domain=domain,
+            layer=layer,
+            depends_on=depends_on,
+            acceptance_criteria=acceptance,
+            risk="medium",
+            requires_local=True,
+            requires_cloud=False,
+            requires_terraform=requires_terraform,
+            requires_screenshots=requires_screenshots,
+            requires_e2e=requires_e2e,
+            expected_paths=expected_paths,
+        )
+
+    def expected_paths_for_parent_task(self, spec: SpecCandidate, lowered_task_text: str) -> List[str]:
+        paths = self.extract_expected_paths_from_spec(spec)
+        if not paths:
+            return []
+        keyword_groups = {
+            "database": ["database", "db", "schema", "manifest", "artifact", "config", "target"],
+            "backend": ["backend", "api", "wrapper", "cli", "pipeline", "quality", "image", "url", "source"],
+            "security": ["security", "cdp", "loopback"],
+            "cloud": ["cloud", "docker", "container", "terraform", "aws", "entrypoint"],
+            "frontend": ["frontend", "react", "ui", "screen", "page"],
+            "qa": ["qa", "validation", "evidence", "documentation", "test"],
+        }
+        active_keywords = [
+            keyword
+            for keywords in keyword_groups.values()
+            for keyword in keywords
+            if keyword in lowered_task_text
+        ]
+        if not active_keywords:
+            return paths
+        selected = [path for path in paths if any(keyword in path.lower() for keyword in active_keywords)]
+        return selected or paths
 
     def checked_split_task_needs_replay(self, spec: SpecCandidate, task: AgentTask) -> bool:
         """Return true for a checked task whose source-branch evidence is incomplete.
@@ -1340,7 +1476,7 @@ class AgenticSDLC:
         if any(word in lowered for word in ["api", "backend", "python", "wrapper", "cli"]):
             domain, layer = "backend", "api"
         if (
-            any(word in lowered for word in ["frontend", "react", "page", "screen"])
+            any(word in lowered for word in ["frontend", "react", "tsx", "jsx", "component", "screen"])
             or re.search(r"\b(ui|front-end)\b", lowered)
         ):
             domain, layer = "frontend", "frontend"
@@ -2209,28 +2345,45 @@ class AgenticSDLC:
     def run_agent_sequence(self, spec: SpecCandidate, task: AgentTask, worktree: Path, story_dir: Path, task_dir: Path, mode: str) -> None:
         domain_agent = self.resolve_domain_agent(task.domain)
         layer = self.task_layer(task)
-        sequence = [
-            ("product-requirements-agent.agent.md", "requirements clarification and acceptance criteria mapping", False),
-            ("architecture-design-lead.agent.md", "verify design blueprint, architecture, data/API/cloud contracts, and test strategy", False),
-            ("paradigm-selection-agent.agent.md", "choose data-driven, object-oriented, or event-driven implementation style for this task", False),
-            ("agentic-sdlc-orchestrator.agent.md", "route task and define implementation plan", False),
-            (domain_agent, "implement the task with one responsibility", True),
-            ("test-strategy-architect.agent.md", "confirm the layer-specific test strategy before QA", True),
-            ("test-engineer.agent.md", "create and run unit/component tests first", True),
-            ("integration-e2e-engineer.agent.md", "create integration and E2E validation when applicable", True),
-            ("dependency-gate-qa.agent.md", f"verify {layer} layer gate and DB → API → frontend ordering", True),
-            ("qa-evidence-collector.agent.md", "run QA checklist and collect evidence", True),
-            ("product-manager-acceptance.agent.md", "run PM acceptance checklist", True),
-            ("dev-manager-pr-governor.agent.md", "enforce one-responsibility PR and engineering standards", True),
-            ("pr-documentation-agent.agent.md", "write concise PR notification and review summary", True),
-        ]
+        if self.lean_agent_sequence_enabled():
+            sequence = [
+                ("architecture-design-lead.agent.md", "verify design blueprint, architecture, data/API/cloud contracts, and test strategy", False),
+                (domain_agent, "implement the task with one responsibility", True),
+                ("test-engineer.agent.md", "create and run unit/component tests first", True),
+                ("integration-e2e-engineer.agent.md", "create integration and E2E validation when applicable", True),
+                ("dependency-gate-qa.agent.md", f"verify {layer} layer gate and DB -> API -> frontend ordering", True),
+                ("qa-evidence-collector.agent.md", "run QA checklist and collect evidence", True),
+                ("product-manager-acceptance.agent.md", "run PM acceptance checklist", True),
+                ("dev-manager-pr-governor.agent.md", "enforce one-responsibility PR and engineering standards", True),
+                ("pr-documentation-agent.agent.md", "write concise PR notification and review summary", True),
+            ]
+        else:
+            sequence = [
+                ("product-requirements-agent.agent.md", "requirements clarification and acceptance criteria mapping", False),
+                ("architecture-design-lead.agent.md", "verify design blueprint, architecture, data/API/cloud contracts, and test strategy", False),
+                ("paradigm-selection-agent.agent.md", "choose data-driven, object-oriented, or event-driven implementation style for this task", False),
+                ("agentic-sdlc-orchestrator.agent.md", "route task and define implementation plan", False),
+                (domain_agent, "implement the task with one responsibility", True),
+                ("test-strategy-architect.agent.md", "confirm the layer-specific test strategy before QA", True),
+                ("test-engineer.agent.md", "create and run unit/component tests first", True),
+                ("integration-e2e-engineer.agent.md", "create integration and E2E validation when applicable", True),
+                ("dependency-gate-qa.agent.md", f"verify {layer} layer gate and DB -> API -> frontend ordering", True),
+                ("qa-evidence-collector.agent.md", "run QA checklist and collect evidence", True),
+                ("product-manager-acceptance.agent.md", "run PM acceptance checklist", True),
+                ("dev-manager-pr-governor.agent.md", "enforce one-responsibility PR and engineering standards", True),
+                ("pr-documentation-agent.agent.md", "write concise PR notification and review summary", True),
+            ]
         if task.requires_terraform or task.domain == "cloud":
-            sequence.insert(3, ("terraform-platform-engineer.agent.md", "ensure all AWS/cloud changes are Terraform-backed", True))
+            insert_at = 1 if self.lean_agent_sequence_enabled() else 3
+            sequence.insert(insert_at, ("terraform-platform-engineer.agent.md", "ensure all AWS/cloud changes are Terraform-backed", True))
         if task.domain in {"frontend", "design"} or task.requires_screenshots:
-            sequence.insert(5, ("visual-qa-engineer.agent.md", "capture screenshots and annotate visual issues", True))
-            sequence.insert(6, ("accessibility-qa-engineer.agent.md", "check accessibility and usability", True))
+            insert_at = 3 if self.lean_agent_sequence_enabled() else 5
+            sequence.insert(insert_at, ("visual-qa-engineer.agent.md", "capture screenshots and annotate visual issues", True))
+            sequence.insert(insert_at + 1, ("accessibility-qa-engineer.agent.md", "check accessibility and usability", True))
         if mode == "cloud":
-            sequence.insert(2, ("cloud-night-worker.agent.md", "avoid local-only assumptions and continue cloud-safe work", False))
+            insert_at = 1 if self.lean_agent_sequence_enabled() else 2
+            sequence.insert(insert_at, ("cloud-night-worker.agent.md", "avoid local-only assumptions and continue cloud-safe work", False))
+        sequence = self.dedupe_agent_sequence(sequence)
 
         total = len(sequence)
         self.log_info(f"Agent sequence: {total} agent step(s) for task {task.task_id}")
@@ -2298,12 +2451,27 @@ class AgenticSDLC:
         }
         return mapping.get(domain, "mid-software-engineer.agent.md")
 
+    def lean_agent_sequence_enabled(self) -> bool:
+        execution = self.config.get("execution", {})
+        return bool(execution.get("lean_agent_sequence", False))
+
+    def dedupe_agent_sequence(self, sequence: List[Tuple[str, str, bool]]) -> List[Tuple[str, str, bool]]:
+        seen: set[str] = set()
+        deduped: List[Tuple[str, str, bool]] = []
+        for agent_file, objective, allow_write in sequence:
+            if agent_file in seen:
+                continue
+            seen.add(agent_file)
+            deduped.append((agent_file, objective, allow_write))
+        return deduped
+
     def stage_write_policy(self, allow_write: bool) -> str:
         if allow_write:
             return textwrap.dedent(
                 """
                 This is an implementation/evidence stage.
                 - You may edit files only within the task expected paths, task evidence paths, and narrowly required tests.
+                - Keep reviewable evidence lean. Prefer updating review-pack.md, test-evidence.md, integration-qa.md, and pr-notification.md instead of creating duplicate checklist files.
                 - Do not edit unrelated files, broad-format the repo, or rewrite prior user changes.
                 - Do not run `git add`, `git commit`, `git push`, `git rebase`, or PR creation commands; the orchestrator handles staging, commits, pushes, and PRs after gates pass.
                 """
@@ -2377,16 +2545,18 @@ class AgenticSDLC:
             - Write concise evidence files under `.agent/stories/{spec.id}/{task.task_id}/` and reviewable evidence under `docs/agentic-evidence/{spec.id}/{task.task_id}/`.
             - Update agents.log using `.ai/scripts/agent_log.py` if available, or append markdown to evidence.
             - If you find bugs, fix in-scope bugs with regression tests; record out-of-scope bugs as follow-up tasks.
+            - Do not create extra task splits. The task list's existing numbered parent tasks are the execution units.
+            - Keep analysis and evidence concise. Spend effort on architecture, implementation, task-level QA, and full integration QA.
 
             Paths to use:
             - Runtime evidence: .agent/stories/{spec.id}/{task.task_id}/
             - Reviewable evidence: docs/agentic-evidence/{spec.id}/{task.task_id}/
-            - QA checklist: docs/agentic-evidence/{spec.id}/{task.task_id}/qa-checklist.md
-            - PM checklist: docs/agentic-evidence/{spec.id}/{task.task_id}/pm-checklist.md
-            - Test strategy matrix: docs/agentic-evidence/{spec.id}/{task.task_id}/layered-test-matrix.md
+            - Review pack: docs/agentic-evidence/{spec.id}/{task.task_id}/review-pack.md
             - Layer gate evidence: docs/agentic-evidence/{spec.id}/layer-gates/{self.task_layer(task)}.passed.md
+            - Test evidence: docs/agentic-evidence/{spec.id}/{task.task_id}/test-evidence.md
+            - Integration QA: docs/agentic-evidence/{spec.id}/{task.task_id}/integration-qa.md
             - PR notification: docs/agentic-evidence/{spec.id}/{task.task_id}/pr-notification.md
-            - Agent log: docs/agentic-evidence/{spec.id}/{task.task_id}/agents.log.md
+            - Optional detailed agent logs belong under .agent/runs unless a failure requires review.
 
             SPEC:
             {spec.content}
@@ -2426,6 +2596,22 @@ class AgenticSDLC:
         if reasoning:
             args.extend(["-c", f"model_reasoning_effort={reasoning}"])
         return args
+
+    def codex_reasoning_effort(self, agent: str, allow_write: bool) -> str:
+        codex_cfg = self.config.get("codex", {})
+        reasoning_env = codex_cfg.get("reasoning_effort_env_var", "AGENTIC_CODEX_REASONING_EFFORT")
+        env_value = os.environ.get(reasoning_env, "").strip()
+        if env_value:
+            return env_value
+        stage_map = codex_cfg.get("stage_reasoning_effort", {})
+        if isinstance(stage_map, dict):
+            for key in (agent, agent.replace(".agent.md", "")):
+                value = str(stage_map.get(key, "")).strip()
+                if value:
+                    return value
+        if not allow_write:
+            return str(codex_cfg.get("analysis_reasoning_effort", "low"))
+        return str(codex_cfg.get("write_reasoning_effort") or codex_cfg.get("model_reasoning_effort") or codex_cfg.get("reasoning_effort", "xhigh"))
 
     def cloud_mode_allowed(self, explicit: bool = False) -> bool:
         if explicit:
@@ -2528,9 +2714,8 @@ class AgenticSDLC:
         sandbox = self.codex_sandbox(allow_write)
         approval_policy = self.codex_approval_policy()
         model_env = self.config["codex"].get("model_env_var", "AGENTIC_CODEX_MODEL")
-        reasoning_env = self.config["codex"].get("reasoning_effort_env_var", "AGENTIC_CODEX_REASONING_EFFORT")
         model = os.environ.get(model_env) or self.config["codex"].get("model", "gpt-5.5")
-        reasoning_effort = os.environ.get(reasoning_env) or self.config["codex"].get("model_reasoning_effort") or self.config["codex"].get("reasoning_effort", "xhigh")
+        reasoning_effort = self.codex_reasoning_effort(agent, allow_write)
         reasoning_summary = self.config["codex"].get("reasoning_summary", "concise")
         verbosity = self.config["codex"].get("verbosity", "high")
         cmd = [codex_bin]
@@ -2738,18 +2923,27 @@ class AgenticSDLC:
         # Dry-run must not dirty the repository; write preview evidence under .agent/runs only.
         target = (task_dir / "ev") if self.dry_run else (worktree / rel)
         target.mkdir(parents=True, exist_ok=True)
-        # Copy story log.
-        if (story_dir / "agents.log.md").exists():
+        lean = self.lean_evidence_enabled()
+        # Copy story log only in legacy evidence mode. Lean mode keeps detailed logs under .agent/runs.
+        if not lean and (story_dir / "agents.log.md").exists():
             write_text(target / "agents.log.md", (story_dir / "agents.log.md").read_text(encoding="utf-8"))
         # Ensure minimum evidence files exist. Agents can replace these with richer content.
-        defaults = {
-            "qa-checklist.md": self.default_qa_checklist(spec, task),
-            "pm-checklist.md": self.default_pm_checklist(spec, task),
-            "test-evidence.md": self.default_test_evidence(spec, task, worktree),
-            "layered-test-matrix.md": self.default_layered_test_matrix(spec, task),
-            "scale-security-architecture-review.md": self.default_scale_review(spec, task),
-            "pr-notification.md": self.default_pr_notification(spec, task),
-        }
+        if lean:
+            defaults = {
+                "review-pack.md": self.default_review_pack(spec, task),
+                "test-evidence.md": self.default_test_evidence(spec, task, worktree),
+                "integration-qa.md": self.default_integration_qa(spec, task),
+                "pr-notification.md": self.default_pr_notification(spec, task),
+            }
+        else:
+            defaults = {
+                "qa-checklist.md": self.default_qa_checklist(spec, task),
+                "pm-checklist.md": self.default_pm_checklist(spec, task),
+                "test-evidence.md": self.default_test_evidence(spec, task, worktree),
+                "layered-test-matrix.md": self.default_layered_test_matrix(spec, task),
+                "scale-security-architecture-review.md": self.default_scale_review(spec, task),
+                "pr-notification.md": self.default_pr_notification(spec, task),
+            }
         for name, content in defaults.items():
             path = target / name
             if not path.exists() or not path.read_text(encoding="utf-8").strip():
@@ -2757,22 +2951,22 @@ class AgenticSDLC:
         if task.requires_screenshots and not (target / "visual-evidence.md").exists():
             write_text(target / "visual-evidence.md", self.default_visual_evidence(spec, task))
 
+    def lean_evidence_enabled(self) -> bool:
+        evidence_cfg = self.config.get("evidence", {})
+        return bool(evidence_cfg.get("lean_mode", True))
+
+    def required_evidence_files(self, task: AgentTask) -> List[str]:
+        required = list(LEAN_EVIDENCE_REQUIRED_FILES if self.lean_evidence_enabled() else LEGACY_EVIDENCE_REQUIRED_FILES)
+        if task.requires_screenshots:
+            required.append("visual-evidence.md")
+        return required
+
     def validate_evidence_ready(self, worktree: Path, spec: SpecCandidate, task: AgentTask) -> None:
         if not bool(self.config.get("pr_policy", {}).get("block_placeholder_evidence", True)):
             return
         rel = Path(self.config["repository"].get("evidence_dir", "docs/agentic-evidence")) / spec.id / task.task_id
         target = worktree / rel
-        required = [
-            "agents.log.md",
-            "qa-checklist.md",
-            "pm-checklist.md",
-            "test-evidence.md",
-            "layered-test-matrix.md",
-            "scale-security-architecture-review.md",
-            "pr-notification.md",
-        ]
-        if task.requires_screenshots:
-            required.append("visual-evidence.md")
+        required = self.required_evidence_files(task)
         failures: List[str] = []
         placeholder_markers = [
             "PENDING_AGENT_VERIFICATION",
@@ -2793,6 +2987,42 @@ class AgenticSDLC:
                 "Evidence gate failed; agents must replace placeholder evidence before a PR can be created:\n"
                 + "\n".join(f"- {item}" for item in failures)
             )
+
+    def default_review_pack(self, spec: SpecCandidate, task: AgentTask) -> str:
+        return f"""# Review Pack: {task.title}
+
+Status: PENDING_AGENT_VERIFICATION
+
+## Scope
+
+- Spec: `{spec.path}` on `{spec.branch}`
+- Task: `{task.task_id}`
+- Responsibility: {task.responsibility}
+- Layer: {self.task_layer(task)}
+
+## Architecture / SOLID Notes
+
+- [ ] Boundaries are clear and the change has one responsibility.
+- [ ] Integration points with the existing app/pipeline are identified.
+- [ ] Risks, rollback, and follow-up items are documented.
+
+## QA / PM Decision
+
+- QA status: Pending
+- PM/product status: Pending
+- Human review focus: implementation, tests, and integration behavior.
+"""
+
+    def default_integration_qa(self, spec: SpecCandidate, task: AgentTask) -> str:
+        return f"""# Integration QA: {task.title}
+
+Status: PENDING_AGENT_VERIFICATION
+
+- [ ] Task-level tests pass.
+- [ ] Integration with adjacent app/pipeline modules is exercised or explicitly blocked.
+- [ ] Full user-story integration impact is recorded when this is the final validation task.
+- [ ] Unit tests are not used as the only completion signal when integration matters.
+"""
 
     def default_qa_checklist(self, spec: SpecCandidate, task: AgentTask) -> str:
         return f"""# QA Checklist: {task.title}
@@ -2942,11 +3172,12 @@ Revert this PR. No production deployment should occur without release gate appro
         current_branch = git_output_or_empty(worktree, "rev-parse", "--abbrev-ref", "HEAD")
         report_dir = task_dir / "bc"
         report_dir.mkdir(parents=True, exist_ok=True)
+        current_diff_base = self.ref_for_branch(spec.branch)
         cmd = [
             sys.executable, str(script), "guard",
             "--mode", phase,
             "--base", default_base,
-            "--current-diff-base", spec.branch,
+            "--current-diff-base", current_diff_base,
             "--exclude-branch", spec.branch,
         ]
         if current_branch and current_branch != spec.branch:
@@ -2955,7 +3186,10 @@ Revert this PR. No production deployment should occur without release gate appro
             "--json-output", str(report_dir / f"{phase}.json"),
             "--markdown-output", str(report_dir / f"{phase}.md"),
         ])
-        for pattern in cfg.get("ignore_patterns", []):
+        ignore_patterns = list(cfg.get("ignore_patterns", []))
+        if self.push_tasks_to_source_spec_branch():
+            ignore_patterns.append(spec.path)
+        for pattern in ignore_patterns:
             cmd.extend(["--ignore-pattern", str(pattern)])
         expected_paths = self.task_branch_conflict_scopes(spec, task) if self.run_tasks_in_current_worktree() else list(task.expected_paths or [])
         if phase == "preflight":
@@ -3229,24 +3463,6 @@ Revert this PR. No production deployment should occur without release gate appro
         heading = "## Agentic Split Task Progress"
         if heading in updated:
             return updated.rstrip() + f"\n{progress_line}\n"
-        if self.worker_wrapper_task_blueprint(task_id):
-            checked_ids = self.completed_split_task_ids_from_text(updated)
-            checked_ids.add(task_id)
-            canonical = [
-                ("worker-wrapper-design-gate", "Clarify worker wrapper design"),
-                ("artifact-manifest-contract", "Add artifact manifest contract"),
-                ("worker-wrapper-cli", "Add wrapper CLI"),
-                ("cdp-security-runtime-guard", "Guard CDP exposure"),
-                ("local-fixture-worker-mode", "Add local fixture worker mode"),
-                ("container-entrypoint-alignment", "Align container entrypoint"),
-                ("worker-wrapper-qa-evidence", "Validate wrapper evidence"),
-                ("worker-wrapper-pm-pr-notice", "Prepare PM PR notice"),
-            ]
-            lines = [heading, ""]
-            for split_id, title in canonical:
-                mark = "x" if split_id in checked_ids else " "
-                lines.append(f"- [{mark}] `{split_id}` - {title}")
-            return updated.rstrip() + "\n\n" + "\n".join(lines) + "\n"
         return updated.rstrip() + f"\n\n{heading}\n\n{progress_line}\n"
 
     def mark_task_spec_completed(self, worktree: Path, spec: SpecCandidate, task: AgentTask, mode: str) -> None:
@@ -3394,10 +3610,9 @@ This marker allows the POC-to-PR workflow to continue on later pushes without re
 
 ## Evidence
 
-- Agent log: `{evidence_rel}/**/agents.log.md`
-- QA evidence: `{evidence_rel}/**/qa-checklist.md`
-- PM evidence: `{evidence_rel}/**/pm-checklist.md`
+- Review packs: `{evidence_rel}/**/review-pack.md`
 - Test evidence: `{evidence_rel}/**/test-evidence.md`
+- Integration QA: `{evidence_rel}/**/integration-qa.md`
 - Layer gates: `{evidence_rel}/layer-gates/`
 
 ## Required review order
@@ -3510,18 +3725,18 @@ Acceptance criteria satisfied:
 {chr(10).join(f'- {ac}' for ac in (task.acceptance_criteria or ['See source spec acceptance criteria.']))}
 
 Assumptions:
-- See `{evidence_rel}/agents.log.md`.
+- See `{evidence_rel}/review-pack.md`.
 
 Clarifications asked / resolved:
-- See `{evidence_rel}/agents.log.md`.
+- See `{evidence_rel}/review-pack.md`.
 
 ## Design / architecture traceability
 
-Design blueprint: `{evidence_rel}/scale-security-architecture-review.md`
+Design blueprint: `{evidence_rel}/review-pack.md`
 Data model / schema evidence: see `{evidence_rel}/test-evidence.md`
 API contract evidence: see `{evidence_rel}/test-evidence.md`
 Cloud/Terraform evidence: see `{evidence_rel}/test-evidence.md` when applicable
-Paradigm decision: see `{evidence_rel}/scale-security-architecture-review.md`
+Paradigm decision: see `{evidence_rel}/review-pack.md`
 
 ## Layer gate
 
@@ -3537,17 +3752,17 @@ Dependency rule: database → API → frontend. Unit tests alone are not enough 
 
 ## QA checklist
 
-QA checklist path or artifact: `{evidence_rel}/qa-checklist.md`
+QA decision/evidence: `{evidence_rel}/integration-qa.md`
 QA decision: Agent-reviewed; human verification requested.
 Open QA feedback:
-- See `{evidence_rel}/agents.log.md`.
+- See `{evidence_rel}/review-pack.md`.
 
 ## PM checklist
 
-PM checklist path or artifact: `{evidence_rel}/pm-checklist.md`
+PM decision/evidence: `{evidence_rel}/review-pack.md`
 PM decision: Agent-reviewed; human AI PM review requested.
 Open PM feedback:
-- See `{evidence_rel}/agents.log.md`.
+- See `{evidence_rel}/review-pack.md`.
 
 ## Mandatory Codex AI review
 
@@ -3561,17 +3776,17 @@ Manager approval must wait until the Codex PR Review Gate passes or the human ma
 
 ## Agent iterations / agents.log
 
-agents.log path/artifact: `{evidence_rel}/agents.log.md`
+Agent iteration summary: `{evidence_rel}/review-pack.md`
 
 | Agent | Iteration | Stage | Action | Status | Evidence |
 |---|---:|---|---|---|---|
-| automated team | 1+ | SDLC | see agents.log | see agents.log | `{evidence_rel}/agents.log.md` |
+| automated team | 1+ | SDLC | see review pack | see review pack | `{evidence_rel}/review-pack.md` |
 
 ## Agent-to-agent feedback
 
 | Feedback | From | Owner | Severity | Status | Evidence |
 |---|---|---|---|---|---|
-| See evidence | agent team | owner agent | see log | see log | `{evidence_rel}/agents.log.md` |
+| See evidence | agent team | owner agent | see review pack | see review pack | `{evidence_rel}/review-pack.md` |
 
 ## Screenshots / visual evidence
 
@@ -3604,7 +3819,7 @@ Bootstrap result: see `{evidence_rel}/test-evidence.md`.
 
 ## Validation
 
-See `{evidence_rel}/test-evidence.md` and `{evidence_rel}/qa-checklist.md`.
+See `{evidence_rel}/test-evidence.md` and `{evidence_rel}/integration-qa.md`.
 
 ```text
 Evidence path: {evidence_rel}
@@ -3612,7 +3827,7 @@ Evidence path: {evidence_rel}
 
 ## Agent self-review
 
-Quality score: see `{evidence_rel}/scale-security-architecture-review.md`
+Quality score: see `{evidence_rel}/review-pack.md`
 Findings fixed:
 - See agent log.
 Findings accepted as follow-up:
@@ -3620,7 +3835,7 @@ Findings accepted as follow-up:
 
 ## Scale/readiness review
 
-See `{evidence_rel}/scale-security-architecture-review.md`.
+See `{evidence_rel}/review-pack.md`.
 
 Scale consideration:
 - Expected current usage: see spec.
@@ -3669,8 +3884,8 @@ Rollback by reverting this PR. Production deployment remains human-approved unle
 
 - Review changed files in `{task.domain}` scope.
 - Review `{evidence_rel}/test-evidence.md`.
-- Review `{evidence_rel}/qa-checklist.md`.
-- Review `{evidence_rel}/pm-checklist.md`.
+- Review `{evidence_rel}/review-pack.md`.
+- Review `{evidence_rel}/integration-qa.md`.
 
 ## Human AI PM requested action
 

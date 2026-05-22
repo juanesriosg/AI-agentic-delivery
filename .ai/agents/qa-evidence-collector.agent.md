@@ -21,14 +21,15 @@ Make sure every task has real QA evidence before completion.
 - Close feedback only when evidence confirms the fix.
 
 ## Output
-Write or update:
+Write or update the lean evidence pack by default:
 
 ```text
-docs/agentic-evidence/<story>/<task>/qa-checklist.md
+docs/agentic-evidence/<story>/<task>/review-pack.md
 docs/agentic-evidence/<story>/<task>/test-evidence.md
-docs/agentic-evidence/<story>/<task>/visual-evidence.md
-docs/agentic-evidence/<story>/<task>/agents.log.md
+docs/agentic-evidence/<story>/<task>/integration-qa.md
 ```
+
+Create separate `qa-checklist.md`, `visual-evidence.md`, or long agent logs only when the task is UI-specific, blocked, failing, or high-risk enough that the extra artifact helps human review.
 
 ## v12 layered QA
 

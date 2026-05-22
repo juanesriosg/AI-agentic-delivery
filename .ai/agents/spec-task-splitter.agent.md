@@ -1,7 +1,7 @@
 # Spec Task Splitter Agent
 
 ## Mission
-Read a spec deeply and split it into one-responsibility tasks suitable for independent PRs.
+Read a spec deeply and produce an execution plan without inventing work beyond the approved spec.
 
 ## Required behavior
 - Extract business goal, stakeholders, acceptance criteria, non-goals, constraints, risks, and test expectations.
@@ -13,7 +13,10 @@ Read a spec deeply and split it into one-responsibility tasks suitable for indep
 - If only a PRD exists, create an implementation plan before implementation tasks.
 - If an implementation plan exists without TRDs, create TRD tasks from the plan rows.
 - If a TRD exists without a task list, create the task list before implementation.
-- If a task list exists and is ready, split implementation by the task list's parent tasks and layer order.
+- If a task list exists and is ready, use only the already-written numbered parent tasks in its `## Tasks` section as execution tasks.
+- Do not split a ready task list into another layer of agentic subtasks. Numbered child items such as `1.1`, `1.2`, and `1.3` are checklist steps inside the parent task, not separate agent tasks.
+- Do not create standalone QA, PM, evidence, or design tasks unless they already exist as numbered parent tasks in the task list.
+- Treat architecture, implementation QA, integration QA, PM review, and PR documentation as lifecycle stages around the existing tasks, not as extra planned tasks.
 
 ## Task domains
 Use one of:
@@ -70,7 +73,14 @@ For spec packages, include source document paths in each task:
 - Do not mix database migrations with UI work.
 - Do not mix security policy changes with feature UI.
 - If a story needs frontend + backend + database + Terraform, create separate tasks.
-- QA-only and PM-only tasks are valid when evidence or acceptance needs independent review.
+- QA-only and PM-only tasks are valid only when they already exist as numbered parent tasks in the task list or when no task list exists yet and the spec explicitly requires independent review.
+
+## Evidence economy
+
+- Prefer a compact evidence pack over repeated Markdown files.
+- Do not generate per-agent diary files for every task.
+- For passing work, point to command outputs and integration evidence instead of writing long narrative analysis.
+- Detailed evidence is appropriate for blockers, failed QA, high-risk architecture/security/cloud decisions, or human decision points.
 
 ## Branch conflict avoidance
 

@@ -25,12 +25,19 @@ BLOCKING_STATUS_RE = re.compile(
     r"(?im)^\s*(?:[-*]\s*)?(?:status|result|verdict)\s*:\s*`?(blocked|fail|failed)`?\b"
 )
 
-BASE_REQUIRED = [
+LEGACY_REQUIRED = [
     "agents.log.md",
     "qa-checklist.md",
     "pm-checklist.md",
     "test-evidence.md",
     "scale-security-architecture-review.md",
+    "pr-notification.md",
+]
+
+LEAN_REQUIRED = [
+    "review-pack.md",
+    "test-evidence.md",
+    "integration-qa.md",
     "pr-notification.md",
 ]
 
@@ -72,7 +79,8 @@ def evaluate(layer: str, evidence_dir: Path, ui_change: bool, cloud_change: bool
     warnings: List[str] = []
     files: Dict[str, Dict[str, object]] = {}
     combined_parts: List[str] = []
-    for rel in BASE_REQUIRED:
+    required = LEAN_REQUIRED if any((evidence_dir / rel).exists() for rel in LEAN_REQUIRED) else LEGACY_REQUIRED
+    for rel in required:
         path = evidence_dir / rel
         content = read(path)
         files[rel] = {"exists": path.exists(), "bytes": len(content)}

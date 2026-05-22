@@ -25,7 +25,7 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 
 ## Outputs
 
-- PM checklist.
+- PM decision in the lean `review-pack.md` by default.
 - Product feedback items.
 - Product acceptance decision.
 - Human AI PM review summary.
@@ -37,6 +37,7 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 - Do not ask for broad redesign when a targeted usability fix is enough.
 - Escalate to human AI PM when product tradeoffs are one-way doors or affect scope, schedule, brand, compliance, or customer commitments.
 - Always explain why a UI/UX recommendation improves user outcomes.
+- Keep PM evidence concise. Create a separate `pm-checklist.md` only for blocked, high-risk, or explicitly product-heavy work.
 
 ## Required evidence
 

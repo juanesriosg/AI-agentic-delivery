@@ -83,6 +83,25 @@
     "explicit_cloud_env_var": "AGENTIC_EXPLICIT_CLOUD",
     "model_fallback": "gpt-5.4",
     "model_reasoning_effort": "xhigh",
+    "analysis_reasoning_effort": "low",
+    "write_reasoning_effort": "xhigh",
+    "stage_reasoning_effort": {
+      "product-requirements-agent": "low",
+      "spec-task-splitter": "low",
+      "paradigm-selection-agent": "low",
+      "agentic-sdlc-orchestrator": "low",
+      "test-strategy-architect": "low",
+      "qa-evidence-collector": "low",
+      "product-manager-acceptance": "low",
+      "dev-manager-pr-governor": "low",
+      "pr-documentation-agent": "low",
+      "visual-qa-engineer": "low",
+      "accessibility-qa-engineer": "low",
+      "architecture-design-lead": "high",
+      "dependency-gate-qa": "medium",
+      "test-engineer": "high",
+      "integration-e2e-engineer": "high"
+    },
     "requested_reasoning_profile": "extra_high",
     "note": "Local Codex agentic SDLC runs use gpt-5.5 with model_reasoning_effort=xhigh. Cloud mode is blocked unless explicitly requested.",
     "local_first": true,
@@ -98,6 +117,7 @@
     "max_tasks_per_spec": 50,
     "max_agent_turns_per_task": 12,
     "one_responsibility_per_pr": true,
+    "lean_agent_sequence": true,
     "continue_when_clarification_exists": true,
     "stop_on_high_risk_without_approval": true,
     "default_task_domains": [
@@ -121,6 +141,13 @@
     "readonly_agents_in_isolated_worktree": true,
     "cloud_requires_explicit_request": true,
     "cloud_only_when_explicitly_requested": true
+  },
+  "evidence": {
+    "lean_mode": true,
+    "target_markdown_files_per_task_list": 10,
+    "soft_markdown_file_warning": 30,
+    "line_count_blocks_commit": false,
+    "commit_detailed_agent_logs": false
   },
   "branching": {
     "implementation_branch_prefix": "ai",

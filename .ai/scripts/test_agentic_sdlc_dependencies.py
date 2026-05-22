@@ -65,6 +65,36 @@ Task completed by agentic SDLC.
 """
 
 
+CURRENT_PIPELINE_TASK_LIST_SPEC = """---
+doc_type: task_list
+status: ready_for_agents
+task_id: P0-F1-T7
+---
+
+# Task List - P0-F1-T7
+
+## Relevant Files
+
+- `city_pipelines/common/pipeline.py` - update scope matching.
+- `city_pipelines/scripts/build_city_targets.py` - update target generation.
+- `city_pipelines/common/extractors/quality.py` - update URL rejection.
+- `city_pipelines/common/scripts/*.mjs` - update CDP guards.
+
+## Tasks
+
+- [ ] 1.0 Align runtime pipeline scope and master-listing behavior.
+  - [ ] 1.1 Inspect `pipeline.py`, `city_config_template.json`, and current wrapper invocation before changes.
+  - [ ] 1.2 Implement `match_mode`, postal normalization, and master-listing override behavior if missing.
+  - [ ] 1.3 Add or update focused tests and evidence for scope matching and override behavior.
+- [ ] 2.0 Align target generation behavior.
+  - [ ] 2.1 Inspect `build_city_targets.py` and generated config expectations.
+  - [ ] 2.2 Implement generated `match_mode`, arrondissement/postal split handling, and postal-split dedupe if missing.
+- [ ] 3.0 Align quality, image, and URL rejection behavior.
+  - [ ] 3.1 Inspect `quality.py`, `images.py`, and existing quality tests.
+  - [ ] 3.2 Implement decoded downloadable/legal-document URL rejection and PDF-like asset filtering if missing.
+"""
+
+
 def make_orchestrator() -> object:
     orchestrator = agentic_sdlc.AgenticSDLC.__new__(agentic_sdlc.AgenticSDLC)
     orchestrator.config = {
@@ -81,10 +111,25 @@ def make_orchestrator() -> object:
             "agent_timeout_max_seconds": 7200,
             "analysis_agent_timeout_seconds": 3600,
             "write_agent_timeout_seconds": 7200,
+            "lean_agent_sequence": True,
             "analysis_stage_failures_block_task": False,
             "readonly_agents_in_isolated_worktree": True,
         },
-        "codex": {"sandbox": "workspace-write", "approval_policy": "never"},
+        "codex": {
+            "sandbox": "workspace-write",
+            "approval_policy": "never",
+            "analysis_reasoning_effort": "low",
+            "write_reasoning_effort": "xhigh",
+            "stage_reasoning_effort": {
+                "product-requirements-agent": "low",
+                "architecture-design-lead": "high",
+                "qa-evidence-collector": "low",
+                "integration-e2e-engineer": "high",
+                "visual-qa-engineer": "low",
+                "accessibility-qa-engineer": "low",
+            },
+        },
+        "evidence": {"lean_mode": True},
     }
     orchestrator.repo = Path.cwd()
     orchestrator.worktree_dir = Path.cwd() / ".agent" / "worktrees"
@@ -208,6 +253,48 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
             else:
                 os.environ["AGENTIC_RUN_IN_CURRENT_WORKTREE"] = old_value
 
+    def test_task_list_parent_tasks_are_used_without_extra_agentic_split(self) -> None:
+        orchestrator = make_orchestrator()
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/current-pipeline",
+            path="specs/city-pipeline-aws-cost-mvp/tasks/tasks-trd-p0-f1-t7-current-pipeline-contract-alignment.md",
+            sha="aaa",
+            content=CURRENT_PIPELINE_TASK_LIST_SPEC,
+            status="ready_for_agents",
+        )
+
+        tasks = orchestrator.plan_tasks_from_task_list(spec)
+
+        self.assertEqual(
+            [
+                "1.0-align-runtime-pipeline-scope-and-master-list",
+                "2.0-align-target-generation-behavior",
+                "3.0-align-quality-image-and-url-rejection-behavi",
+            ],
+            [task.task_id for task in tasks],
+        )
+        self.assertEqual(["1.0-align-runtime-pipeline-scope-and-master-list"], tasks[1].depends_on)
+        self.assertNotIn("worker-wrapper-cli", [task.task_id for task in tasks])
+        self.assertIn("Implement `match_mode`", " ".join(tasks[0].acceptance_criteria))
+        self.assertEqual("backend", tasks[0].domain)
+        self.assertEqual("database", tasks[1].domain)
+        self.assertNotIn("qa", [task.domain for task in tasks[:3]])
+        self.assertNotIn("frontend", [task.domain for task in tasks[:3]])
+
+    def test_worker_wrapper_task_list_no_longer_uses_hardcoded_resplit(self) -> None:
+        orchestrator = make_orchestrator()
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/task-f1-t1",
+            path="specs/city-pipeline-aws-cost-mvp/tasks/tasks-trd-p0-f1-t1-worker-wrapper-artifacts.md",
+            sha="aaa",
+            content=LEGACY_WORKER_WRAPPER_SPEC,
+            status="ready_for_agents",
+        )
+
+        tasks = orchestrator.plan_tasks_from_task_list(spec)
+
+        self.assertEqual([], tasks)
+
     def test_task_change_scopes_include_expected_evidence_layer_and_spec_paths(self) -> None:
         orchestrator = make_orchestrator()
         spec = agentic_sdlc.SpecCandidate(
@@ -305,6 +392,60 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         self.assertIn(f"docs/agentic-evidence/{spec.id}/artifact-manifest-contract", scopes)
         self.assertNotIn(spec.path, scopes)
 
+    def test_postflight_branch_conflict_uses_remote_source_ref_and_ignores_progress_spec(self) -> None:
+        orchestrator = make_orchestrator()
+        spec = agentic_sdlc.SpecCandidate(
+            branch="dev/task-f1-t1",
+            path="specs/city-pipeline-aws-cost-mvp/tasks/tasks-trd-p0-f1-t1-worker-wrapper-artifacts.md",
+            sha="aaa",
+            content=LEGACY_WORKER_WRAPPER_SPEC,
+            status="ready_for_agents",
+        )
+        task = agentic_sdlc.AgentTask(
+            task_id="artifact-manifest-contract",
+            title="Add artifact manifest contract",
+            responsibility="Define manifest.",
+            domain="backend",
+            acceptance_criteria=["Manifest is defined."],
+            expected_paths=["city_pipelines/cloud/artifacts.py"],
+            layer="database",
+            depends_on=[],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(["git", "config", "user.email", "agent@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Agent"], cwd=repo, check=True)
+            subprocess.run(["git", "switch", "-c", "agent-work"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            script = repo / ".ai" / "scripts" / "branch_conflict_guard.py"
+            script.parent.mkdir(parents=True)
+            script.write_text("# guard marker\n", encoding="utf-8")
+            task_dir = repo / ".agent" / "runs" / "task"
+            story_dir = repo / ".agent" / "story"
+            captured: list[list[str]] = []
+            original_run = agentic_sdlc.run
+            orchestrator.repo = repo
+            orchestrator.ref_for_branch = lambda branch: f"origin/{branch}"
+
+            def fake_run(cmd, *args, **kwargs):
+                captured.append([str(part) for part in cmd])
+                return subprocess.CompletedProcess(cmd, 0, stdout="{}", stderr="")
+
+            try:
+                agentic_sdlc.run = fake_run
+                self.assertTrue(orchestrator.run_branch_conflict_check(repo, spec, task, story_dir, task_dir, "postflight"))
+            finally:
+                agentic_sdlc.run = original_run
+
+        guard_cmds = [cmd for cmd in captured if "branch_conflict_guard.py" in " ".join(cmd)]
+        self.assertEqual(1, len(guard_cmds))
+        cmd = guard_cmds[0]
+        self.assertIn("--current-diff", cmd)
+        self.assertEqual(f"origin/{spec.branch}", cmd[cmd.index("--current-diff-base") + 1])
+        ignore_values = [cmd[i + 1] for i, value in enumerate(cmd[:-1]) if value == "--ignore-pattern"]
+        self.assertIn(spec.path, ignore_values)
+
     def test_windows_worktree_shell_scripts_are_normalized_to_lf(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -327,6 +468,19 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
         self.assertEqual(orchestrator.codex_sandbox(allow_write=False), "danger-full-access")
         self.assertEqual(orchestrator.codex_sandbox(allow_write=True), "danger-full-access")
         self.assertEqual(orchestrator.codex_approval_policy(), "never")
+
+    def test_noncritical_agents_use_low_reasoning_without_lowering_critical_stages(self) -> None:
+        orchestrator = make_orchestrator()
+        old_value = os.environ.pop("AGENTIC_CODEX_REASONING_EFFORT", None)
+        try:
+            self.assertEqual("low", orchestrator.codex_reasoning_effort("qa-evidence-collector", allow_write=True))
+            self.assertEqual("low", orchestrator.codex_reasoning_effort("product-requirements-agent", allow_write=False))
+            self.assertEqual("high", orchestrator.codex_reasoning_effort("architecture-design-lead", allow_write=False))
+            self.assertEqual("high", orchestrator.codex_reasoning_effort("integration-e2e-engineer", allow_write=True))
+            self.assertEqual("xhigh", orchestrator.codex_reasoning_effort("backend-engineer", allow_write=True))
+        finally:
+            if old_value is not None:
+                os.environ["AGENTIC_CODEX_REASONING_EFFORT"] = old_value
 
     def test_analysis_stage_prompt_policy_forbids_mutating_files(self) -> None:
         orchestrator = make_orchestrator()
@@ -489,7 +643,7 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
 
         def fake_call_codex(prompt, cwd, run_dir, agent, mode, allow_write):
             calls.append((agent, allow_write))
-            if agent == "product-requirements-agent":
+            if agent == "architecture-design-lead":
                 raise agentic_sdlc.OrchestratorError("simulated advisory failure")
 
         orchestrator.call_codex = fake_call_codex
@@ -521,8 +675,11 @@ class AgenticSdlcDependencyTests(unittest.TestCase):
                 mode="local",
             )
 
-        self.assertEqual("product-requirements-agent", calls[0][0])
+        self.assertEqual("architecture-design-lead", calls[0][0])
         self.assertIn(("database-engineer", True), calls)
+        self.assertNotIn("product-requirements-agent", [agent for agent, _ in calls])
+        self.assertNotIn("paradigm-selection-agent", [agent for agent, _ in calls])
+        self.assertNotIn("agentic-sdlc-orchestrator", [agent for agent, _ in calls])
         self.assertEqual("pr-documentation-agent", calls[-1][0])
 
     def test_run_agent_sequence_blocks_when_write_stage_fails(self) -> None:
@@ -733,11 +890,7 @@ status: ready_for_agents
         self.assertEqual([task.task_id for task in tasks], [
             "artifact-manifest-contract",
             "worker-wrapper-cli",
-            "cdp-security-runtime-guard",
-            "local-fixture-worker-mode",
             "container-entrypoint-alignment",
-            "worker-wrapper-qa-evidence",
-            "worker-wrapper-pm-pr-notice",
         ])
         self.assertEqual(tasks[0].expected_paths[1], "city_pipelines/cloud/artifacts.py")
         self.assertEqual(tasks[0].depends_on, ["worker-wrapper-design-gate"])
@@ -755,16 +908,7 @@ status: ready_for_agents
 
         tasks = orchestrator.order_tasks_by_layer(orchestrator.plan_tasks_from_task_list(spec))
 
-        self.assertEqual([task.task_id for task in tasks], [
-            "artifact-manifest-contract",
-            "worker-wrapper-cli",
-            "cdp-security-runtime-guard",
-            "local-fixture-worker-mode",
-            "container-entrypoint-alignment",
-            "worker-wrapper-qa-evidence",
-            "worker-wrapper-pm-pr-notice",
-        ])
-        self.assertEqual(tasks[0].depends_on, ["worker-wrapper-design-gate"])
+        self.assertEqual([], tasks)
 
     def test_worker_wrapper_marking_adds_full_progress_section_when_missing(self) -> None:
         orchestrator = make_orchestrator()
@@ -780,9 +924,8 @@ status: ready_for_agents
 
         updated = orchestrator.mark_task_progress_checkbox_done(LEGACY_WORKER_WRAPPER_SPEC, task)
 
-        self.assertIn("- [x] `worker-wrapper-design-gate` - Clarify worker wrapper design", updated)
+        self.assertNotIn("worker-wrapper-cli", updated)
         self.assertIn("- [x] `artifact-manifest-contract` - Add artifact manifest contract", updated)
-        self.assertIn("- [ ] `worker-wrapper-cli` - Add wrapper CLI", updated)
 
     def test_worker_wrapper_dependency_accepts_legacy_completion_note(self) -> None:
         orchestrator = make_orchestrator()
