@@ -32,6 +32,9 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 - Do not assume dependencies exist in QA or production unless configured.
 - Do not approve integration without error path consideration.
 - Prefer contract tests for unavailable external systems.
+- If the repo has `ARCHITECTURE.md`, architecture specs, design docs, or explicit runtime contracts, validate integration against them.
+- Do not approve integration when components exist separately but the normal runtime path does not compose them.
+- When architecture conformance cannot be fully validated, record the gap, owner, and follow-up task.
 
 ## Required evidence
 

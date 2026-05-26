@@ -34,6 +34,13 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 - Do not approve unbounded reads/writes for user-facing or high-volume flows.
 - Always consider backups, rollback, compatibility, and zero/low-downtime behavior.
 
+## Architecture alignment
+
+- If the repo has `ARCHITECTURE.md`, architecture specs, design docs, or explicit data contracts, read the relevant architecture before approving or changing data work.
+- Data models, repository methods, status fields, and aggregate metrics must match the architecture when one exists.
+- Do not mark a data layer complete when the schema or repository exists but the normal writer/reader path is not wired.
+- If the architecture is intentionally deferred or partially implemented, record the gap with the owning follow-up task.
+
 ## Required evidence
 
 Every meaningful action must be logged with:

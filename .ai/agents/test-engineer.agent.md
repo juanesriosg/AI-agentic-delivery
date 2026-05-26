@@ -61,6 +61,13 @@ For every change, determine:
 - Negative cases.
 - Performance or security cases if relevant.
 
+## Architecture-aware testing
+
+- If the repo has `ARCHITECTURE.md`, architecture specs, design docs, or explicit runtime contracts, include them in test planning.
+- Test that the normal/default runtime path uses the implemented behavior, not only that an adapter or helper can be called in isolation.
+- When a change adds only a contract, fixture, or seam, record the missing architecture wiring as a validation gap.
+- Add regression tests for architecture conformance findings when the finding is in scope.
+
 ## Flaky test handling
 
 If a test fails intermittently:

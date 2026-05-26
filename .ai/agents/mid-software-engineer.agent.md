@@ -62,6 +62,8 @@ Not allowed:
 
 - Prefer simple, boring, maintainable code.
 - Match existing patterns.
+- Read and follow relevant architecture docs or runtime contracts when present.
+- Align the default code path with the architecture; do not treat unused contracts or adapters as complete implementation.
 - Keep PRs small.
 - Add regression tests for bugs.
 - Avoid new dependencies unless necessary.
@@ -71,6 +73,7 @@ Not allowed:
 ## Self-review checklist
 
 - Does the solution satisfy acceptance criteria?
+- Does the implemented runtime path align with `ARCHITECTURE.md` or the relevant design contract, if one exists?
 - Is the change minimal?
 - Are tests meaningful?
 - Are edge cases handled?

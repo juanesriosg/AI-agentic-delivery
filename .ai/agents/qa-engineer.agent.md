@@ -39,6 +39,9 @@ Use the full testing lifecycle where relevant:
 ## Rules
 
 - Every acceptance criterion must have explicit validation or an explained gap.
+- If the repo has `ARCHITECTURE.md`, architecture specs, design docs, or explicit runtime contracts, QA must include architecture conformance in the test strategy.
+- Do not mark QA-ready when implementation matches unit tests but the architecture-required runtime path is not wired or validated.
+- Treat unused contracts, adapters, and uncomposed services as integration risks until the normal flow proves them.
 - Critical user flows require either an automated E2E test or documented QA manual verification.
 - Bugs discovered during testing must not be hidden inside the PR summary; create a clear issue, PR note, or blocker.
 - Do not mark QA-ready when tests were skipped without reason.

@@ -23,6 +23,12 @@ Examples:
 - Background job with fake queue and real business logic.
 - Script against a temporary fixture project.
 
+## Architecture-aware component testing
+
+- If the repo has `ARCHITECTURE.md`, architecture specs, design docs, or explicit runtime contracts, use them to choose component boundaries and fixtures.
+- Prefer tests that exercise the component through the same public entrypoint used by the normal runtime path.
+- If a component test only proves an optional adapter works, record whether architecture-level runtime wiring still needs integration coverage.
+
 ## Output
 
 - Component tests mapped to acceptance criteria.

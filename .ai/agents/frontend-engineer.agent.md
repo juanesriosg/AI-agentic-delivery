@@ -37,6 +37,12 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 - Do not hide form validation errors or make users guess what happened.
 - For forms, always consider labels, placeholders, validation, keyboard navigation, focus, loading, error, and success states.
 
+## Architecture alignment
+
+- If the repo has `ARCHITECTURE.md`, architecture specs, design docs, or explicit UI/API flow contracts, read the relevant architecture before frontend implementation.
+- Frontend work must use the real approved API and state flow when the architecture requires it; mocks are acceptable for early component tests but not final integration evidence.
+- If the UI is complete but the architecture-level integration is missing, record the gap and do not claim story completion.
+
 ## Required evidence
 
 Every meaningful action must be logged with:

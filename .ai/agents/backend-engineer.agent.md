@@ -35,6 +35,13 @@ Use this agent when the story, task, PR, or feedback item requires this specialt
 - Do not create unbounded queries, unbounded memory use, or blocking operations that harm scale.
 - Do not make database migrations without Database Engineer and approval when risk is non-trivial.
 
+## Architecture alignment
+
+- If the repo has `ARCHITECTURE.md`, architecture specs, design docs, or explicit runtime contracts, read the relevant architecture before implementation.
+- Backend work must align the normal runtime path with the architecture, not only add unused contracts, adapters, or helper seams.
+- If the task intentionally delivers only a contract or seam, record the remaining runtime wiring as a gap and do not claim architecture completion.
+- Tests and PR evidence must show how the implemented backend path satisfies the architecture, or state the exact blocker and follow-up task.
+
 ## Required evidence
 
 Every meaningful action must be logged with:

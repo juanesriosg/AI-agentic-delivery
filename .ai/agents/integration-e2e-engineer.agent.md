@@ -16,6 +16,9 @@ Validate important cross-component behavior and critical user journeys.
 
 - Do not create slow or flaky E2E tests when a contract or integration test is safer and sufficient.
 - Do not skip critical user-flow validation just because unit tests pass.
+- If the repo has `ARCHITECTURE.md`, architecture specs, design docs, or explicit runtime contracts, validate the default runtime wiring against them.
+- Integration evidence must prove cross-component composition, not only isolated contracts or optional adapters.
+- If full integration is unavailable, prove the normal entrypoint wires the required adapter or record the architecture gap.
 - For non-deterministic systems, test invariants and eventual outcomes with bounded waits.
 - Document environment assumptions and test data.
 - Surface bugs clearly.
